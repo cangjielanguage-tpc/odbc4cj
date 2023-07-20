@@ -1,0 +1,256 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+package odbc
+
+/* Global variables */
+/* SQL results */
+let SQL_ERROR: Int16 = -1
+let SQL_INVALID_HANDLE: Int16 = -2
+let SQL_SUCCESS: Int16 = 0
+let SQL_SUCCESS_WITH_INFO: Int16 = 1
+
+/* Environment attribute */
+let SQL_ATTR_ODBC_VERSION: Int16 = 200
+
+/* Value for ODBC version */
+let SQL_OV_ODBC3: Int64 = 3
+
+/* Handle types */
+let SQL_HANDLE_ENV: Int16 = 1
+let SQL_HANDLE_DBC: Int16 = 2
+let SQL_HANDLE_STMT: Int16 = 3
+let SQL_HANDLE_DESC: Int16 = 4
+
+/* Connection attribute */
+let SQL_ATTR_ACCESS_MODE: Int32 = 101
+let SQL_ATTR_ASYNC_DBC_EVENT: Int32 = 119
+let SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE: Int32 = 117
+let SQL_ATTR_ASYNC_ENABLE: Int32 = 4
+let SQL_ATTR_AUTO_IPD = 10001
+let SQL_ATTR_AUTOCOMMIT: Int32 = 102
+let SQL_ATTR_CONNECTION_DEAD: Int32 = 1209
+let SQL_ATTR_CONNECTION_TIMEOUT: Int32 = 113
+let SQL_ATTR_CURRENT_CATALOG: Int32 = 109
+let SQL_ATTR_DBC_INFO_TOKEN: Int32 = 118
+let SQL_ATTR_ENLIST_IN_DTC: Int32 = 1207
+let SQL_ATTR_LOGIN_TIMEOUT: Int32 = 103
+let SQL_ATTR_METADATA_ID: Int32 = 10014
+let SQL_ATTR_ODBC_CURSORS: Int32 = 110
+let SQL_ATTR_PACKET_SIZE: Int32 = 112
+let SQL_ATTR_QUIET_MODE: Int32 = 111
+let SQL_ATTR_TRACE: Int32 = 104
+let SQL_ATTR_TRACEFILE: Int32 = 105
+let SQL_ATTR_TRANSLATE_LIB: Int32 = 106
+let SQL_ATTR_TRANSLATE_OPTION: Int32 = 107
+let SQL_ATTR_TXN_ISOLATION: Int32 = 108
+
+/* Autocommit options */
+let SQL_AUTOCOMMIT_OFF: Int64 = 0
+let SQL_AUTOCOMMIT_ON: Int64 = 1
+
+/* End transaction options */
+let SQL_COMMIT: Int16 = 0
+let SQL_ROLLBACK: Int16 = 1
+
+/* Attribute type options */
+let SQL_IS_POINTER: Int32 = -4
+let SQL_IS_UINTEGER: Int32 = -5
+let SQL_IS_INTEGER: Int32 = -6
+let SQL_IS_USMALLINT: Int32 = -7
+let SQL_IS_SMALLINT: Int32 = -8
+
+let SQL_NO_TOTAL: Int64 = -4
+
+/* Misc */
+let SQL_NTS: Int16 = -3
+
+/* Bind parameter options */
+let SQL_PARAM_INPUT: Int16 = 1
+let SQL_NO_DATA: Int16 = 100
+let SQL_NULL_DATA: Int64 = -1
+
+let SQL_UNKNOWN_TYPE: Int16 = 0
+let SQL_CHAR: Int16 = 1
+let SQL_NUMERIC: Int16 = 2
+let SQL_DECIMAL: Int16 = 3
+let SQL_INTEGER: Int16 = 4
+let SQL_SMALLINT: Int16 = 5
+let SQL_FLOAT: Int16 = 6
+let SQL_REAL: Int16 = 7
+let SQL_DOUBLE: Int16 = 8
+let SQL_VARCHAR: Int16 = 12
+
+let SQL_TYPE_DATE: Int16 = 91
+let SQL_TYPE_TIME: Int16 = 92
+let SQL_TYPE_TIMESTAMP: Int16 = 93
+
+let SQL_LONGVARCHAR: Int16 = -1
+let SQL_BINARY: Int16 = -2
+let SQL_VARBINARY: Int16 = -3
+let SQL_LONGVARBINARY: Int16 = -4
+let SQL_BIGINT: Int16 = -5
+let SQL_TINYINT: Int16 = -6
+let SQL_BIT: Int16 = -7
+
+let SQL_SIGNED_OFFSET: Int16 = -20
+let SQL_UNSIGNED_OFFSET: Int16 = -22
+
+let SQL_C_UNKNOWN_TYPE: Int16 = SQL_UNKNOWN_TYPE
+let SQL_C_CHAR: Int16 = SQL_CHAR
+let SQL_C_LONG: Int16 = SQL_INTEGER
+let SQL_C_SHORT: Int16 = SQL_SMALLINT
+let SQL_C_FLOAT: Int16 = SQL_REAL
+let SQL_C_DOUBLE: Int16 = SQL_DOUBLE
+
+let SQL_C_BINARY: Int16 = SQL_BINARY
+let SQL_C_BIT: Int16 = SQL_BIT
+let SQL_C_SBIGINT: Int16 = SQL_BIGINT+SQL_SIGNED_OFFSET
+let SQL_C_UBIGINT: Int16 = SQL_BIGINT+SQL_UNSIGNED_OFFSET
+let SQL_C_TINYINT: Int16 = SQL_TINYINT
+let SQL_C_SLONG: Int16 = SQL_C_LONG+SQL_SIGNED_OFFSET
+let SQL_C_SSHORT: Int16 = SQL_C_SHORT+SQL_SIGNED_OFFSET
+let SQL_C_STINYINT: Int16 = SQL_TINYINT+SQL_SIGNED_OFFSET
+let SQL_C_ULONG: Int16 = SQL_C_LONG+SQL_UNSIGNED_OFFSET
+let SQL_C_USHORT: Int16 = SQL_C_SHORT+SQL_UNSIGNED_OFFSET
+let SQL_C_UTINYINT: Int16 = SQL_TINYINT+SQL_UNSIGNED_OFFSET
+
+let SQL_C_TYPE_DATE: Int16 = SQL_TYPE_DATE
+let SQL_C_TYPE_TIME: Int16 = SQL_TYPE_TIME
+let SQL_C_TYPE_TIMESTAMP: Int16 = SQL_TYPE_TIMESTAMP
+
+
+/* Lengths */
+let LEN_POINTER: UIntNative = 8
+let LEN_Int32: UIntNative = 4
+let LEN_Int16: UIntNative = 2
+let LEN_SQLSTATE: UIntNative = 6
+let LEN_MESSAGE: UIntNative = 512
+let STRING_LEN: UInt64 = 8000
+
+let SQL_NO_NULLS: Int16 = 0
+let SQL_NULLABLE: Int16 = 1
+let SQL_NULLABLE_UNKNOWN: Int16 = 2
+
+@C
+struct DATE_STRUCT {
+    var year: Int16 = 0
+    var month: Int16 = 0
+    var day: Int16 = 0
+}
+
+@C
+struct TIME_STRUCT {
+    var hour: Int16 = 0
+    var minute: Int16 = 0
+    var second: Int16 = 0
+}
+
+@C
+struct TIMESTAMP_STRUCT {
+    var year: Int16 = 0
+    var month: Int16 = 0
+    var day: Int16 = 0
+    var hour: Int16 = 0
+    var minute: Int16 = 0
+    var second: Int16 = 0
+    var fraction: UInt32 = 0
+}
+
+struct DataBuffer {
+    var data: CPointer<Unit> = CPointer<Unit>()
+    var len: Int64 = 0
+}
+
+func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): Unit {
+    var sqlstatePtr = unsafe { malloc(LEN_SQLSTATE) }
+    if (sqlstatePtr.isNull()) {
+        throw SqlException("Native malloc failed.")
+    }
+    var nativeErrorPtr = unsafe { malloc(LEN_Int32) }
+    if (nativeErrorPtr.isNull()) {
+        unsafe { free(sqlstatePtr) }
+        throw SqlException("Native malloc failed.")
+    }
+    var messageText = unsafe { malloc(LEN_MESSAGE) }
+    if (sqlstatePtr.isNull()) {
+        unsafe {
+            free(sqlstatePtr)
+            free(nativeErrorPtr)
+        }
+        throw SqlException("Native malloc failed.")
+    }
+
+    var totalBytesPtr = unsafe { malloc(LEN_Int16) }
+    if (sqlstatePtr.isNull()) {
+        unsafe {
+            free(sqlstatePtr)
+            free(nativeErrorPtr)
+            free(messageText)
+        }
+        throw SqlException("Native malloc failed.")
+    }
+    var msgLen = Int16(LEN_MESSAGE)
+    var i: Int16 = 1
+    var ret: Int16
+    var rvalue: String
+
+    do {
+        unsafe {
+            CPointer<Int8>(messageText).write(0)
+            CPointer<Int8>(sqlstatePtr).write(0)
+            CPointer<Int32>(nativeErrorPtr).write(0)
+            CPointer<Int16>(totalBytesPtr).write(0)
+        }
+
+        ret = unsafe { SQLGetDiagRec(HandleType, Handle, i, sqlstatePtr, nativeErrorPtr, messageText, msgLen, totalBytesPtr) }
+
+        var totalBytes = unsafe { CPointer<Int16>(totalBytesPtr).read() }
+        if (ret == SQL_NO_DATA) {
+            break
+        }
+
+        if (SQLSucceeded(ret) && totalBytes > msgLen - 1) {
+            msgLen = totalBytes + 1
+            var msgPtr = unsafe { realloc(messageText, Int64(msgLen)) }
+            if (msgPtr.isNull()) {
+                unsafe {
+                    free(sqlstatePtr)
+                    free(nativeErrorPtr)
+                    free(messageText)
+                    free(totalBytesPtr)
+                }
+                throw SqlException("Native realloc failed.")
+            }
+            messageText = msgPtr
+
+            ret = unsafe { SQLGetDiagRec(HandleType, Handle, i, sqlstatePtr, nativeErrorPtr, messageText, msgLen, totalBytesPtr) }
+            if (!SQLSucceeded(ret)) {
+                break
+            }
+        }
+
+        // Not always NULL terminated (MS Access)
+        unsafe { CPointer<Int8>(sqlstatePtr).write(5, 0) }
+
+        var text = CString(CPointer<UInt8>(messageText))
+        var nativeError = unsafe { CPointer<Int32>(nativeErrorPtr).read() }
+        var sqlstate = CString(CPointer<UInt8>(sqlstatePtr))
+        println("${sqlstate.toString()}: ${text.toString()} (${nativeError})")
+
+        i++
+
+    } while (ret != SQL_NO_DATA)
+
+    unsafe {
+        free(sqlstatePtr)
+        free(nativeErrorPtr)
+        free(messageText)
+        free(totalBytesPtr)
+    }
+}
+
+func SQLSucceeded(res: Int16): Bool {
+    return (res == SQL_SUCCESS_WITH_INFO) || (res == SQL_SUCCESS)
+}

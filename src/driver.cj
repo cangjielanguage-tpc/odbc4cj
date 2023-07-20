@@ -1,0 +1,95 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
+ */
+
+package odbc
+
+from std import database.sql.*, io.*, time.*, regex.*, core.*, math.*
+
+public class OdbcDriver <: Driver {
+    private var ENV_handlePtr: CPointer<CPointer<Unit>>
+
+    public init() {
+        /* Allocate Environment Handle */
+        this.ENV_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_POINTER) })
+        if (this.ENV_handlePtr.isNull()) {
+            throw SqlException("native malloc Failed.")
+        }
+        let nullHandle = CPointer<Unit>()
+        var ret = unsafe { SQLAllocHandle(SQL_HANDLE_ENV, nullHandle, this.ENV_handlePtr) }
+        if (!SQLSucceeded(ret)) {
+            throw SqlException("Can't initialize module odbc. SQLAllocEnv failed.")
+        }
+
+        /* Set version attribute */
+        ret = unsafe { SQLSetEnvAttr(this.ENV_handlePtr.read(), SQL_ATTR_ODBC_VERSION, SQL_OV_ODBC3, 0) }
+        if (!SQLSucceeded(ret)) {
+            throw SqlException("Unable to set SQL_ATTR_ODBC_VERSION attribute.")
+        }
+    }
+
+    /**
+     * 驱动名称
+     */
+    public prop name: String {
+        get() {
+            ""
+        }
+    }
+
+    /**
+     * 驱动版本
+     */
+    public prop version: String {
+        get() {
+            ""
+        }
+    }
+
+    /**
+     * 指示驱动程序是否与连接池亲和。
+     * 如果否，则不建议使用连接池。
+     * 比如 sqlite 驱动连接池化的收益不明显不建议使用连接池
+     */
+    public prop preferredPooling: Bool {
+        get() {
+            true
+        }
+    }
+
+    /**
+     * 通过 connectionString 和选项打开数据源
+     * 参数 connectionString - 数据库连接字符串
+     * 参数 opts - key, value 的tuple数组，打开数据源的选项
+     * 返回值 Datasource - 数据源实例
+     */
+    public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {
+        var serverName = ""
+        var userName = ""
+        var password = ""
+
+        var arr = connectionString.split(';')
+        if (arr.size != 3) {
+            throw SqlException("Url is error, example: DATABASE=sql;UID=abc;PWD=123")
+        }
+
+        for (i in 0..3) {
+            var list = arr[i].split('=')
+            if (list.size != 2) {
+                throw SqlException("Url is error, example: DATABASE=sql;UID=abc;PWD=123")
+            }
+
+            if (list[0].equals("DATABASE")) {
+                serverName = list[1]
+            } else if (list[0].equals("UID")) {
+                userName = list[1]
+            } else if (list[0].equals("PWD")) {
+                password = list[1]
+            } else {
+                throw SqlException("Url is error, example: DATABASE=sql;UID=abc;PWD=123")
+            }
+        }
+
+        return unsafe { OdbcDatasource(ENV_handlePtr.read(), serverName, userName, password, opts) }
+    }
+}

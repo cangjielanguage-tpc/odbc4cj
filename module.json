@@ -1,0 +1,17 @@
+{
+	"cjc_version": "0.39.4",
+	"organization": "cangjie",
+	"name": "odbc4cj",
+	"description": "nothing here",
+	"version": "0.0.1",
+	"requires": {},
+	"package_requires": {},
+	"foreign_requires": {
+		"myodbc8a": {
+			"path": "./lib/",
+			"export": []
+		}
+	},
+	"output_type": "static",
+	"command_option": "-O2"
+}
