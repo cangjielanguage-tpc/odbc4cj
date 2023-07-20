@@ -378,7 +378,7 @@ public class OdbcStatement <: Statement {
         }
     }
 
-    public func setClob(index: Int64, value: Option<InputStream>): Unit {
+    private func setClob(index: Int64, value: Option<InputStream>): Unit {
         var ret: Int16
         var flag: Bool
         match(value) {
@@ -427,7 +427,7 @@ public class OdbcStatement <: Statement {
         }
     }
 
-    public func setBlob(index: Int64, value: Option<InputStream>): Unit {
+    private func setBlob(index: Int64, value: Option<InputStream>): Unit {
         var ret: Int16
         var flag: Bool
         match(value) {
@@ -478,7 +478,7 @@ public class OdbcStatement <: Statement {
         }
     }
 
-    public func setBool(index: Int64, value: Option<Bool>): Unit {
+    private func setBool(index: Int64, value: Option<Bool>): Unit {
         var ret: Int16
         if (value != None) {
             var parameterValuePtr = CPointer<Byte>(unsafe { malloc(1) })
@@ -895,114 +895,6 @@ public class OdbcStatement <: Statement {
                                             SQL_PARAM_INPUT,
                                             SQL_C_TYPE_TIME,
                                             SQL_TYPE_TIME,
-                                            0,
-                                            0,
-                                            parameterValuePtr,
-                                            0,
-                                            nullData)
-            }
-        }
-
-        if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, this.STMT_handlePtr.read()) }
-        }
-    }
-
-    private func setTimeTz(index: Int64, value: Option<DateTime>): Unit {
-        var ret: Int16
-        if (value != None) {
-            var parameterValuePtr = CPointer<TIME_STRUCT>(unsafe { malloc(6) })
-            if (parameterValuePtr.isNull()) {
-                throw SqlException("native malloc Failed.")
-            }
-            let realValue: DateTime = value.getOrThrow()
-            var time = TIME_STRUCT()
-            time.hour = Int16(realValue.hour)
-            time.minute = Int16(realValue.minute)
-            time.second = Int16(realValue.second)
-
-            unsafe { parameterValuePtr.write(time) }
-            var columnSize = 16
-            var nullHandle = CPointer<Int64>()
-            ret = unsafe { SQLBindParameter(this.STMT_handlePtr.read(),
-                                            index + 1,
-                                            SQL_PARAM_INPUT,
-                                            SQL_C_TYPE_TIME,
-                                            SQL_TYPE_TIME,
-                                            UInt64(columnSize),
-                                            0,
-                                            CPointer<Unit>(parameterValuePtr),
-                                            6,
-                                            nullHandle)
-            }
-        } else {
-            var parameterValuePtr = CPointer<Unit>()
-            var nullData = CPointer<Int64>(unsafe { malloc(8) })
-            if (nullData.isNull()) {
-                throw SqlException("native malloc Failed.")
-            }
-            unsafe { nullData.write(SQL_NULL_DATA) }
-            ret = unsafe { SQLBindParameter(this.STMT_handlePtr.read(),
-                                            index + 1,
-                                            SQL_PARAM_INPUT,
-                                            SQL_C_TYPE_TIME,
-                                            SQL_TYPE_TIME,
-                                            0,
-                                            0,
-                                            parameterValuePtr,
-                                            0,
-                                            nullData)
-            }
-        }
-
-        if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, this.STMT_handlePtr.read()) }
-        }
-    }
-
-    public func setTimestamp(index: Int64, value: Option<DateTime>): Unit {
-        var ret: Int16
-        if (value != None) {
-            var parameterValuePtr = CPointer<TIMESTAMP_STRUCT>(unsafe { malloc(16) })
-            if (parameterValuePtr.isNull()) {
-                throw SqlException("native malloc Failed.")
-            }
-            let realValue: DateTime = value.getOrThrow()
-            var timestamp = TIMESTAMP_STRUCT()
-            timestamp.year = Int16(realValue.year)
-            timestamp.month = Int16(realValue.monthValue)
-            timestamp.day = Int16(realValue.dayOfMonth)
-            timestamp.hour = Int16(realValue.hour)
-            timestamp.minute = Int16(realValue.minute)
-            timestamp.second = Int16(realValue.second)
-            timestamp.fraction = UInt32(realValue.nanosecond)
-
-            unsafe { parameterValuePtr.write(timestamp) }
-            var columnSize = 16
-            var nullHandle = CPointer<Int64>()
-            ret = unsafe { SQLBindParameter(this.STMT_handlePtr.read(),
-                                            index + 1,
-                                            SQL_PARAM_INPUT,
-                                            SQL_C_TYPE_TIMESTAMP,
-                                            SQL_TYPE_TIMESTAMP,
-                                            UInt64(columnSize),
-                                            0,
-                                            CPointer<Unit>(parameterValuePtr),
-                                            16,
-                                            nullHandle)
-            }
-        } else {
-            var parameterValuePtr = CPointer<Unit>()
-            var nullData = CPointer<Int64>(unsafe { malloc(8) })
-            if (nullData.isNull()) {
-                throw SqlException("native malloc Failed.")
-            }
-            unsafe { nullData.write(SQL_NULL_DATA) }
-            ret = unsafe { SQLBindParameter(this.STMT_handlePtr.read(),
-                                            index + 1,
-                                            SQL_PARAM_INPUT,
-                                            SQL_C_TYPE_TIMESTAMP,
-                                            SQL_TYPE_TIMESTAMP,
                                             0,
                                             0,
                                             parameterValuePtr,

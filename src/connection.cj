@@ -4,34 +4,37 @@
 
 package odbc
 
-from std import collection.*
+from std import collection.*, sync.*
 
 public class OdbcConnection <: Connection {
     private var DBC_handlePtr: CPointer<Unit>
+    private let closed = AtomicBool(true)
 
-    public init(DBC_handlePtr: CPointer<Unit>, serverName: String, userName: String, authentication: String) {
+    public init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String) {
         var ret: Int16
 
         this.DBC_handlePtr = DBC_handlePtr
 
         /* Connect to database */
         unsafe {
-            let csServerName = LibC.mallocCString(serverName)
+            let csDateBase = LibC.mallocCString(dateBase)
             let csUserName = LibC.mallocCString(userName)
-            let csAuthentication = LibC.mallocCString(authentication)
-            ret = SQLConnect(DBC_handlePtr, csServerName, SQL_NTS, csUserName, SQL_NTS, csAuthentication, SQL_NTS)
-            LibC.free(csServerName)
+            let csPassword = LibC.mallocCString(password)
+            ret = SQLConnect(DBC_handlePtr, csDateBase, SQL_NTS, csUserName, SQL_NTS, csPassword, SQL_NTS)
+            LibC.free(csDateBase)
             LibC.free(csUserName)
-            LibC.free(csAuthentication)
+            LibC.free(csPassword)
         }
 
         if (!SQLSucceeded(ret)) {
             unsafe {
                 DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 // SQLFreeHandle(SQL_HANDLE_ENV, ENV_handle)
-                // SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
+                SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
             }
             throw SqlException("Can't initialize module odbc. SQLDriverConnect failed.")
+        } else {
+            closed.store(false)
         }
     }
 
@@ -89,10 +92,17 @@ public class OdbcConnection <: Connection {
     }
 
     public func close(): Unit {
-        unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
+        if (closed.load()) {
+            return
+        }
+        closed.store(true)
+        unsafe {
+            DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
+        }
     }
 
     public func isClosed(): Bool {
-        return DBC_handlePtr.isNull()
+        return closed.load()
     }
 }

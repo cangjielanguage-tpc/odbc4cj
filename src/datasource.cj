@@ -5,14 +5,14 @@
 package odbc
 
 public class OdbcDatasource <: Datasource {
-    private var serverName: String
+    private var dateBase: String
     private var userName: String
     private var password: String
     private var DBC_handlePtr = CPointer<CPointer<Unit>>()
 
-    public init(ENV_handle: CPointer<Unit>, serverName: String, userName: String, password: String, opts: Array<(String, String)>) {
+    public init(ENV_handle: CPointer<Unit>, dateBase: String, userName: String, password: String, opts: Array<(String, String)>) {
         var ret: Int16
-        this.serverName = serverName
+        this.dateBase = dateBase
         this.userName = userName
         this.password = password
         DBC_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(8) })
@@ -75,7 +75,7 @@ public class OdbcDatasource <: Datasource {
      * 返回值 Connection - 数据库连接实例
      */
     public func connect(): OdbcConnection {
-        var conn = unsafe { OdbcConnection(DBC_handlePtr.read(), serverName, userName, password) }
+        var conn = unsafe { OdbcConnection(DBC_handlePtr.read(), dateBase, userName, password) }
         return conn
     }
 
