@@ -12,21 +12,37 @@
 
 ## 介绍
 
-介绍库或者框架符合的标准，应用领域，解决什么问题。有哪些主要的特点，与同类库相比有哪些优点。
+基于 odbc 实现 database 包。
 
 ### 特性
 
 - 🚀 特性1
 
+  数据库驱动接口
+
 - 🚀 特性2
+
+  数据源接口
 
 - 💪 特性3
 
+  数据库连接接口
+
 - 🛠️ 特性4
+
+  sql语句预执行接口
 
 - 🌍 特性5
 
+  执行Select/Query语句返回结果的列信息
+
 - 💡  特性6
+
+  执行 Select 语句产生的结果接口
+
+- 💡  特性7
+
+  数据库事务的核心行为
 
 ### 路线
 
@@ -50,19 +66,23 @@
 
 ```shell
 .
-├── README.md
-├── doc
-│   ├── assets
-│   ├── cjcov
-│   ├── design.md
-│   ├── proposal.md
-│   └── xxx_lib.md
-├── src
-│   └── Template.cj
-└── test
-    ├── HLT
-    ├── LLT
-    └── UT
+├─ doc
+├─ README.md
+├─ README.OpenSource
+├─ src
+│  ├─ columnInfo.cj
+│  ├─ connection.cj
+│  ├─ datasource.cj
+│  ├─ driver.cj
+│  ├─ native.cj
+│  ├─ queryResult.cj
+│  ├─ statement.cj
+│  ├─ transaction.cj
+│  ├─ updateResult.cj
+│  └─ util.cj
+└─ test
+   ├─ HLT
+   └─ LLT
 ```
 
 - `doc`  文档目录，用于存放设计、API接口等文档
@@ -81,51 +101,51 @@
 描述具体的编译过程：
 
 ```shell
-cpm update
-cpm build
+cjpm build
 ```
 
 ### 功能示例
-#### xxx 功能示例
-
-功能示例描述:
-
-示例代码如下：
-
 ```cangjie
-import xxx.*
+package odbc
+from std import database.sql.*, io.*, time.*, regex.*
+from odbc4cj import odbc.*
+
 main() {
- xxxx
+    var driver = OdbcDriver()
+    var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
+    var conn = database.connect()
+    var prepareStatement = conn.prepareStatement("drop table if exists test")
+    var rowCount = prepareStatement.update()
+    prepareStatement = conn.prepareStatement("create table test(data int NOT NULL, datanull int)")
+    rowCount = prepareStatement.update()
+    prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+    rowCount = prepareStatement.update([SqlIntger(12345), SqlNullableIntger(None)])
+    prepareStatement = conn.prepareStatement("select * from test")
+    var queryResult = prepareStatement.query()
+    var arr: Array<SqlDbType> = queryResult.getSqlDbType()
+    queryResult.next(arr)
+    match (arr[0]) {
+        case v: SqlIntger => println(v.value)
+        case _ => ()
+    }
+    match (arr[1]) {
+        case v: SqlNullableIntger => println(v.value)
+        case _ => ()
+    }
 }
+
+
 ```
 
 执行结果如下：
 
 ```shell
-xxx
-```
-
-#### xxxx 功能示例
-
-功能示例描述:
-
-示例代码如下：
-
-```cangjie
-import xxx.*
-main() {
- xxxx
-}
-```
-
-执行结果如下：
-
-```shell
-xxx
+12345
+None
 ```
 
 ## 开源协议
-xx License
+MulanPSL-2.0 License
 
 ## 参与贡献
 

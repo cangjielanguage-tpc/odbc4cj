@@ -83,5 +83,4 @@ public class OdbcColumnInfo <: ColumnInfo {
             lNullable
         }
     }
-
 }

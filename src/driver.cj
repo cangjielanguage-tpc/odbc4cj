@@ -64,7 +64,7 @@ public class OdbcDriver <: Driver {
      * 返回值 Datasource - 数据源实例
      */
     public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {
-        var serverName = ""
+        var dateBase = ""
         var userName = ""
         var password = ""
 
@@ -80,7 +80,7 @@ public class OdbcDriver <: Driver {
             }
 
             if (list[0].equals("DATABASE")) {
-                serverName = list[1]
+                dateBase = list[1]
             } else if (list[0].equals("UID")) {
                 userName = list[1]
             } else if (list[0].equals("PWD")) {
@@ -90,6 +90,6 @@ public class OdbcDriver <: Driver {
             }
         }
 
-        return unsafe { OdbcDatasource(ENV_handlePtr.read(), serverName, userName, password, opts) }
+        return unsafe { OdbcDatasource(ENV_handlePtr.read(), dateBase, userName, password, opts) }
     }
 }

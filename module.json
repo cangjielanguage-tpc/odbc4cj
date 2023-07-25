@@ -12,6 +12,6 @@
 			"export": []
 		}
 	},
-	"output_type": "static",
+	"output_type": "dynamic",
 	"command_option": "-O2"
 }
