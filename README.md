@@ -34,33 +34,33 @@
 
 - 🌍 特性5
 
-  执行Select/Query语句返回结果的列信息
+  执行Insert、Update、Delete语句产生的结果接口
 
 - 💡  特性6
 
-  执行 Select 语句产生的结果接口
+  执行Select/Query语句返回结果的列信息
 
 - 💡  特性7
 
+  执行 Select 语句产生的结果接口
+
+- 💡  特性8
+
   数据库事务的核心行为
 
-### 路线
+### 约束
 
-<p align="center">
-<img src="./doc/assets/milestone.png" width="100%" >
-</p>
-路线图roadmap在 doc/framework-roadmap-logo.pptx 中有源文件。
-
+```
+1. 不支持数据类型（SqlTimeTz、SqlTimestamp、SqlInterval），新增支持数据类型请参考 sqlTypeExtend.cj
+2. interface Driver 不支持 name、version、preferredPooling
+3. Datasource 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
+4. interface Connection 不支持 getMetaData()，请使用 getInfo(infoType: UInt16, len: Int16)
+5. interface Statement 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
+6. interface UpdateResult 不支持 lastInsertId
+7. interface Transaction 不支持 accessMode、deferrableMode、save(savePointName: String)、rollback(savepointName: String)、release(savePointName: String)
+```
 
 ## 软件架构
-
-### 架构图
-
-<p align="center">
-<img src="./doc/assets/framework.png" width="60%" >
-</p>
-
-架构图文字说明，包括模块说明、架构层次等详细说明。
 
 ### 源码目录
 
@@ -76,6 +76,7 @@
 │  ├─ driver.cj
 │  ├─ native.cj
 │  ├─ queryResult.cj
+│  ├─ sqlTypeExtend.cj
 │  ├─ statement.cj
 │  ├─ transaction.cj
 │  ├─ updateResult.cj
@@ -91,7 +92,7 @@
 
 ### 接口说明
 
-主要类和函数接口说明详见 [API](./doc/api.md)
+主要类和函数接口说明详见 [API](./doc/feature_api.md)
 
 
 ## 使用说明

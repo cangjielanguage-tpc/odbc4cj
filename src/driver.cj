@@ -22,14 +22,14 @@ public class OdbcDriver <: Driver {
         }
 
         /* Set version attribute */
-        ret = unsafe { SQLSetEnvAttr(this.ENV_handlePtr.read(), SQL_ATTR_ODBC_VERSION, SQL_OV_ODBC3, 0) }
+        ret = unsafe { SQLSetEnvAttr(this.ENV_handlePtr.read(), SQL_ATTR_ODBC_VERSION, SQL_OV_ODBC3, SQL_IS_INTEGER) }
         if (!SQLSucceeded(ret)) {
             throw SqlException("Unable to set SQL_ATTR_ODBC_VERSION attribute.")
         }
     }
 
     /**
-     * 驱动名称
+     * 驱动名称 (不支持)
      */
     public prop name: String {
         get() {
@@ -38,7 +38,7 @@ public class OdbcDriver <: Driver {
     }
 
     /**
-     * 驱动版本
+     * 驱动版本 (不支持)
      */
     public prop version: String {
         get() {
@@ -47,7 +47,7 @@ public class OdbcDriver <: Driver {
     }
 
     /**
-     * 指示驱动程序是否与连接池亲和。
+     * 指示驱动程序是否与连接池亲和。(不支持)
      * 如果否，则不建议使用连接池。
      * 比如 sqlite 驱动连接池化的收益不明显不建议使用连接池
      */
@@ -59,8 +59,10 @@ public class OdbcDriver <: Driver {
 
     /**
      * 通过 connectionString 和选项打开数据源
-     * 参数 connectionString - 数据库连接字符串
-     * 参数 opts - key, value 的tuple数组，打开数据源的选项
+     * 参数 connectionString - 数据库连接字符串, 格式为 "DATABASE=sql;UID=abc;PWD=123"
+     * 参数 opts - key, value 的 tuple 数组，打开数据源的选项
+     *            opts 只有 ("SQL_ATTR_AUTOCOMMIT", "SQL_AUTOCOMMIT_OFF") 和 ("SQL_ATTR_AUTOCOMMIT", "SQL_AUTOCOMMIT_ON")
+     *            2个选项，用来设置 sql 语句提交方式
      * 返回值 Datasource - 数据源实例
      */
     public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {

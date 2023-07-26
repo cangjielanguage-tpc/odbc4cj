@@ -19,12 +19,25 @@ public class OdbcTransaction <: Transaction {
         }
 
         set(value) {
+            var valuePtr: Int64
+            match (value) {
+                case ReadCommitted => valuePtr = Int64(SQL_TXN_READ_COMMITTED)
+                case ReadUncommitted => valuePtr = Int64(SQL_TXN_READ_UNCOMMITTED)
+                case RepeatableRead => valuePtr = Int64(SQL_TXN_REPEATABLE_READ)
+                case Serializable => valuePtr = Int64(SQL_TXN_SERIALIZABLE)
+                case _ => throw SqlException(" ${value} mode not supported.")
+            }
+            var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER) }
+            if (!SQLSucceeded(ret)) {
+                unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+            }
+
             level = value
         }
     }
 
     /*
-     * 数据库事务访问模式。
+     * 数据库事务访问模式。(不支持)
      */
     public mut prop accessMode: TransactionAccessMode {
         get() {
@@ -37,7 +50,7 @@ public class OdbcTransaction <: Transaction {
     }
 
     /*
-     * 数据库事务延迟模式。
+     * 数据库事务延迟模式。(不支持)
      */
     public mut prop deferrableMode: TransactionDeferrableMode {
         get() {
@@ -51,6 +64,31 @@ public class OdbcTransaction <: Transaction {
 
     public init(DBC_handlePtr: CPointer<Unit>) {
         this.DBC_handlePtr = DBC_handlePtr
+        var infoValue: UInt32
+        unsafe {
+            var infoValuePtr = malloc(UIntNative(4))
+            if (infoValuePtr.isNull()) {
+                throw SqlException("native malloc Failed.")
+            }
+            var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
+            if (!SQLSucceeded(ret)) {
+                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                free(infoValuePtr)
+                throw SqlException("SQLGetInfo failed.")
+            }
+            infoValue = CPointer<UInt32>(infoValuePtr).read()
+            free(infoValuePtr)
+        }
+
+        if (infoValue == SQL_TXN_READ_UNCOMMITTED) {
+            level = ReadUncommitted
+        } else if (infoValue == SQL_TXN_READ_COMMITTED) {
+            level = ReadCommitted
+        } else if (infoValue == SQL_TXN_REPEATABLE_READ) {
+            level = RepeatableRead
+        } else if (infoValue == SQL_TXN_SERIALIZABLE) {
+            level = Serializable
+        }
     }
 
     /*
@@ -84,10 +122,14 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public func rollback(): Unit {
+        var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_ROLLBACK) }
+        if (!SQLSucceeded(ret)) {
+            unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+        }
     }
 
     /*
-     * 在事务中创建一个指定名称的保存点，可用于回滚事务的一部分。
+     * 在事务中创建一个指定名称的保存点，可用于回滚事务的一部分。(不支持)
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
@@ -96,7 +138,7 @@ public class OdbcTransaction <: Transaction {
     }
 
     /*
-     * 回滚事务至指定保存点名称。
+     * 回滚事务至指定保存点名称。(不支持)
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
@@ -105,7 +147,7 @@ public class OdbcTransaction <: Transaction {
     }
 
     /*
-     * 销毁先前在当前事务中定义的保存点。这允许系统在事务结束之前回收一些资源。
+     * 销毁先前在当前事务中定义的保存点。这允许系统在事务结束之前回收一些资源。(不支持)
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */

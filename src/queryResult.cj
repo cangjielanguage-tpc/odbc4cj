@@ -86,6 +86,10 @@ public class OdbcQueryResult <: QueryResult {
                 arr.set(i, SqlTime(DateTime.now()))
             } else if (columnInfos[i].typeName == "SqlNullableTime") {
                 arr.set(i, SqlNullableTime(DateTime.now()))
+            } else if (columnInfos[i].typeName == "SqlTimestampWithoutTz") {
+                arr.set(i, SqlTimestampWithoutTz(DateTime.now()))
+            } else if (columnInfos[i].typeName == "SqlNullableTimestampWithoutTz") {
+                arr.set(i, SqlNullableTimestampWithoutTz(DateTime.now()))
             } else {
                 throw SqlException("Unknown sql type.")
             }
@@ -136,6 +140,8 @@ public class OdbcQueryResult <: QueryResult {
                     case v: SqlNullableDate => v.value = getDate(i)
                     case v: SqlTime => v.value = getTime(i).getOrThrow()
                     case v: SqlNullableTime => v.value = getTime(i)
+                    case v: SqlTimestampWithoutTz => v.value = getTimestampWithoutTz(i).getOrThrow()
+                    case v: SqlNullableTimestampWithoutTz => v.value = getTimestampWithoutTz(i)
                     case _ => ()
                 }
             }
@@ -320,7 +326,7 @@ public class OdbcQueryResult <: QueryResult {
             if (colValue == 1) {
                 res = Some(true)
             } else {
-                res = Some(true)
+                res = Some(false)
             }
         }
 
@@ -610,6 +616,51 @@ public class OdbcQueryResult <: QueryResult {
                 minute: Int64(colValue.minute),
                 second: Int64(colValue.second),
                 nanosecond: 0,
+            )
+            res = Some(timestamp)
+        }
+
+        unsafe {
+            free(colValueUnitPtr)
+            free(CPointer<Unit>(sizePtr))
+        }
+        return res
+    }
+
+
+
+    private func getTimestampWithoutTz(index: Int64): Option<DateTime> {
+        let colValueSize = 16
+        var res = Option<DateTime>.None
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(16) })
+        if (colValueUnitPtr.isNull()) {
+            throw SqlException("Native malloc failed.")
+        }
+        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        if (sizePtr.isNull()) {
+            throw SqlException("Native malloc failed.")
+        }
+        var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIMESTAMP, colValueUnitPtr, colValueSize, sizePtr) }
+        if (!SQLSucceeded(ret)) {
+            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            unsafe {
+                free(colValueUnitPtr)
+                free(CPointer<Unit>(sizePtr))
+            }
+            throw SqlException("Get timestamp failed.")
+        }
+
+        if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
+            var colValuePtr = CPointer<TIMESTAMP_STRUCT>(colValueUnitPtr)
+            var colValue = unsafe { colValuePtr.read() }
+            var timestamp = DateTime.of(
+                year: Int64(colValue.year),
+                month: Int64(colValue.month),
+                dayOfMonth: Int64(colValue.day),
+                hour: Int64(colValue.hour),
+                minute: Int64(colValue.minute),
+                second: Int64(colValue.second),
+                nanosecond: Int64(colValue.fraction),
             )
             res = Some(timestamp)
         }

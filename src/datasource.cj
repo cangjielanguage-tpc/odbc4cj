@@ -38,26 +38,16 @@ public class OdbcDatasource <: Datasource {
                 } else if (opts[i][1] == "SQL_AUTOCOMMIT_ON") {
                     println("SQL_ATTR_AUTOCOMMIT value must be SQL_AUTOCOMMIT_OFF or SQL_AUTOCOMMIT_ON")
                 }
+            } else {
+                println("Only supported SQL_ATTR_AUTOCOMMIT.")
             }
         }
     }
 
     /*
-     * 设置连接选项
+     * 设置连接选项 (使用 setOption(key: Int32, value: Int64))
      */
     public func setOption(key: String, value: String): Unit {
-    }
-
-    /*
-     * 设置连接选项
-     */
-    public func setOption(key: Int32, value: String): Unit {
-        var cs = unsafe { LibC.mallocCString(value) }
-        var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr.read(), key, Int64(cs.getChars().toUIntNative()), Int32(value.size)) }
-        unsafe { LibC.free(cs) }
-        if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr.read()) }
-        }
     }
 
     /*

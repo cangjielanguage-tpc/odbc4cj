@@ -10,7 +10,7 @@ from std import unittest.testmacro.*
 main(): Int64 {
     let filterResultTest: OdbcTest = OdbcTest()
 
-    filterResultTest.testChar()
+    filterResultTest.test001()
 
     return 0
 }
@@ -18,7 +18,7 @@ main(): Int64 {
 @Test
 public class OdbcTest {
     @TestCase
-    public func testChar(): Unit {
+    public func test001(): Unit {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
