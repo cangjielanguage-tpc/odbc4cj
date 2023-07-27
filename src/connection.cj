@@ -9,6 +9,7 @@ from std import collection.*, sync.*
 public class OdbcConnection <: Connection {
     private var DBC_handlePtr: CPointer<Unit>
     private let closed = AtomicBool(true)
+    private var STMT_handlePtr: CPointer<CPointer<Unit>>
 
     public init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String) {
         var ret: Int16
@@ -29,12 +30,24 @@ public class OdbcConnection <: Connection {
         if (!SQLSucceeded(ret)) {
             unsafe {
                 DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                // SQLFreeHandle(SQL_HANDLE_ENV, ENV_handle)
                 SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
             }
             throw SqlException("Can't initialize module odbc. SQLDriverConnect failed.")
         } else {
             closed.store(false)
+        }
+
+        STMT_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(8) })
+        if (STMT_handlePtr.isNull()) {
+            throw SqlException("native malloc Failed.")
+        }
+        ret = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
+        if (!SQLSucceeded(ret)) {
+            unsafe {
+                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
+                throw SqlException("Can't initialize module odbc. SQLAllocStmt failed.")
+            }
         }
     }
 
@@ -43,7 +56,7 @@ public class OdbcConnection <: Connection {
      */
     public prop state: ConnectionState {
         get() {
-            if (DBC_handlePtr.isNull()) {
+            if (closed.load()) {
                 Closed
             } else {
                 Connected
@@ -52,10 +65,52 @@ public class OdbcConnection <: Connection {
     }
 
     /**
-     * 返回连接到的数据源元数据
+     * 返回连接到的数据源元数据 (不支持), 使用 getInfo 方法
      */
     public func getMetaData(): Map<String, String> {
         HashMap<String, String>()
+    }
+
+    /**
+     * 返回有关与连接关联的驱动程序和数据源的常规信息，请参考 odbc 接口文档
+     * infoType - 信息类型
+     * len - 信息长度
+     *       UInt16: len = 2
+     *       UInt32: len = 4
+     *       UInt64: len = 8
+     *       String: len > 8
+     */
+    public func getInfo(infoType: UInt16, len: Int16): String {
+        var infoValue: String = ""
+
+        if (!(len == 2 || len == 4 || len >= 8)) {
+            throw SqlException("len is not 2, 4 or >=8.")
+        }
+        unsafe {
+            var infoValuePtr = malloc(UIntNative(len))
+            if (infoValuePtr.isNull()) {
+                throw SqlException("native malloc Failed.")
+            }
+            var ret = SQLGetInfo(DBC_handlePtr, infoType, infoValuePtr, len, CPointer<Unit>())
+            if (!SQLSucceeded(ret)) {
+                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                free(infoValuePtr)
+                throw SqlException("SQLGetInfo failed.")
+            }
+            if (len == 2) {
+                infoValue = CPointer<UInt16>(infoValuePtr).read().toString()
+            } else if (len == 4) {
+                infoValue = CPointer<UInt32>(infoValuePtr).read().toString()
+            } else if (len == 8) {
+                infoValue = CPointer<UInt64>(infoValuePtr).read().toString()
+            } else if (len > 8) {
+                infoValue = CString(CPointer<UInt8>(infoValuePtr)).toString()
+            }
+
+            free(infoValuePtr)
+        }
+
+        return infoValue
     }
 
     /**
@@ -66,17 +121,16 @@ public class OdbcConnection <: Connection {
      */
     public func prepareStatement(sql: String): OdbcStatement {
         /* Allocate statement handle */
-        var statement = OdbcStatement(DBC_handlePtr)
         unsafe {
+            var statement = OdbcStatement(STMT_handlePtr.read())
             let csql = LibC.mallocCString(sql)
-            var ret = SQLPrepare(statement.getStmtHandle(), csql, csql.size())
+            var ret = SQLPrepare(STMT_handlePtr.read(), csql, csql.size())
             LibC.free(csql)
             if (!SQLSucceeded(ret)) {
-                unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             }
+            return statement
         }
-
-        return statement
     }
 
     /**
@@ -85,10 +139,6 @@ public class OdbcConnection <: Connection {
      */
     public func createTransaction(): OdbcTransaction {
         OdbcTransaction(DBC_handlePtr)
-    }
-
-    public func getDbcHandle(): CPointer<Unit> {
-        return DBC_handlePtr
     }
 
     public func close(): Unit {

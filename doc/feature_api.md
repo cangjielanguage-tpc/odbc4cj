@@ -12,6 +12,16 @@
 
 约束：
 
+```
+1. 不支持数据类型（SqlTimeTz、SqlTimestamp、SqlInterval），新增支持数据类型请参考 sqlTypeExtend.cj
+2. interface Driver 不支持 name、version、preferredPooling
+3. Datasource 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
+4. interface Connection 不支持 getMetaData()，请使用 getInfo(infoType: UInt16, len: Int16)
+5. interface Statement 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
+6. interface UpdateResult 不支持 lastInsertId
+7. interface Transaction 不支持 accessMode、deferrableMode、save(savePointName: String)、rollback(savepointName: String)、release(savePointName: String)
+```
+
 性能：NA
 
 可靠性：NA
@@ -64,6 +74,7 @@ public class OdbcDatasource <: Datasource {
     * 参数 - dateBase 数据库名
     * 参数 - userName 用户名
     * 参数 - password 密码
+    * 参数 - opts 连接选项（只支持 SQL_ATTR_AUTOCOMMIT）
     */
     public init(ENV_handle: CPointer<Unit>, dateBase: String, userName: String, password: String, opts: Array<(String, String)>)
 
@@ -75,17 +86,14 @@ public class OdbcDatasource <: Datasource {
     *
     * 返回值 - Unit
     */
-    public func setOption(key: Int32, value: String): Unit
+    public func setOption(key: Int32, value: Int64): Unit
 
     /*
-    * 设置连接选项
-    * 
-    * 参数 - key 属性ID
-    * 参数 - value 属性值
+    * 返回一个可用的连接
     *
-    * 返回值 - Unit
+    * 返回值 - OdbcConnection
     */
-    public func setOption(key: Int32, value: Int64): Unit
+    public func connect(): OdbcConnection
 }
 ```
 
@@ -94,8 +102,11 @@ public class OdbcDatasource <: Datasource {
 #### 3.1 特性介绍
 
 1. 初始化接口
-2. 通过传入的 sql 语句，返回一个预执行的 Statement 对象实例
-3. 创建事务对象
+2. 返回有关与连接关联的驱动程序和数据源的常规信息
+3. 通过传入的 sql 语句，返回一个预执行的 Statement 对象实例
+4. 创建事务对象
+5. 关闭连接
+6. 判断连接是否关闭
 
 #### 3.2  实现方案
 
@@ -112,6 +123,20 @@ public class OdbcConnection <: Connection {
     public init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String)
 
     /*
+    * 返回有关与连接关联的驱动程序和数据源的常规信息，请参考 odbc 接口文档
+    * 
+    * 参数 - infoType 信息类型
+    * 参数 - len 信息长度
+    *        UInt16: len = 2
+    *        UInt32: len = 4
+    *        UInt64: len = 8
+    *        String: len > 8
+    *
+    * 返回值 - String
+    */
+    public func getInfo(infoType: UInt16, len: Int16): String
+
+    /*
     * 通过传入的 sql 语句，返回一个预执行的 Statement 对象实例
     * 
     * 参数 - sql sql语句
@@ -126,6 +151,22 @@ public class OdbcConnection <: Connection {
     * 返回值 - OdbcTransaction
     */
     public func createTransaction(): OdbcTransaction
+
+
+    /*
+    * 关闭连接
+    *
+    * 返回值 - Unit
+    */
+    public func close(): Unit
+
+
+    /*
+    * 判断连接是否关闭
+    *
+    * 返回值 - Bool
+    */
+    public func isClosed(): Bool
 }
 ```
 
@@ -134,8 +175,9 @@ public class OdbcConnection <: Connection {
 #### 4.1 特性介绍
 
 1. 初始化接口
-2. 执行 sql 语句，得到更新结果
-3. 执行 sql 语句，得到查询结果
+2. 设置预执行 sql 语句选项
+3. 执行 sql 语句，得到更新结果
+4. 执行 sql 语句，得到查询结果
 
 #### 4.2  实现方案
 
@@ -147,6 +189,16 @@ public class OdbcStatement <: Statement {
     * 参数 - DBC_handlePtr 数据源句柄
     */
     public init(DBC_handle: CPointer<Unit>)
+    
+    /*
+    * 设置预执行 sql 语句选项
+    * 
+    * 参数 - key 属性ID
+    * 参数 - value 属性值
+    *
+    * 返回值 - Unit
+    */
+    public func setOption(key: Int32, value: Int64): Unit
 
     /*
     * 执行 sql 语句，得到更新结果
@@ -165,6 +217,13 @@ public class OdbcStatement <: Statement {
     * 返回值 - QueryResult
     */
     public func query(params: Array<SqlDbType>): QueryResult
+    
+    /*
+    * 获取语句句柄
+    *
+    * 返回值 - CPointer<Unit>
+    */
+    public func getStmtHandle(): CPointer<Unit>
 }
 ```
 
@@ -264,6 +323,7 @@ public class OdbcQueryResult <: QueryResult {
 1. 初始化接口
 2. 开始数据库事务
 3. 提交数据库事务
+4. 从挂起状态回滚事务
 
 #### 8.2  实现方案
 
@@ -273,16 +333,29 @@ public class OdbcTransaction <: Transaction {
     * 初始化接口
     * 
     * 参数 - STMT_handle 数据源句柄
+    * 
+    * 返回值 - Unit
     */
     public init(DBC_handlePtr: CPointer<Unit>) 
 
     /*
     * 开始数据库事务
+    * 
+    * 返回值 - Unit
     */
     public func begin(): Unit
 
     /*
     * 提交数据库事务
+    * 
+    * 返回值 - Unit
+    */
+    public func commit(): Unit
+
+    /*
+    * 从挂起状态回滚事务
+    * 
+    * 返回值 - Unit
     */
     public func commit(): Unit
 }
