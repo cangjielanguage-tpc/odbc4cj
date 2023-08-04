@@ -2,7 +2,7 @@
 // EXEC: ./main
 
 package odbc
-from std import database.sql.*, io.*, time.*, regex.*
+from std import database.sql.*, io.*, time.*, regex.*, math.*
 from odbc4cj import odbc.*
 from std import unittest.*
 from std import unittest.testmacro.*
@@ -23,6 +23,7 @@ public class OdbcTest {
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123", [("SQL_ATTR_AUTOCOMMIT", "SQL_AUTOCOMMIT_OFF")])
         var conn = database.connect()
         var tran = conn.createTransaction()
+        tran.begin()
         var prepareStatement = conn.prepareStatement("drop table if exists test")
         var rowCount = prepareStatement.update()
         tran.commit()
@@ -32,6 +33,7 @@ public class OdbcTest {
         tran.commit()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+        rowCount = prepareStatement.update([SqlIntger(Int32.Max), SqlNullableIntger(None)])
         rowCount = prepareStatement.update([SqlIntger(Int32.Max), SqlNullableIntger(None)])
         tran.commit()
         @Assert(1, rowCount.rowCount)
@@ -51,5 +53,10 @@ public class OdbcTest {
             case v: SqlNullableIntger => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+
+        prepareStatement = conn.prepareStatement("update test set datanull = 10")
+        rowCount = prepareStatement.update()
+        @Assert(2, rowCount.rowCount)
+        tran.commit()
     }
 }

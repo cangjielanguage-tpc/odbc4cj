@@ -66,9 +66,9 @@ public class OdbcTransaction <: Transaction {
         this.DBC_handlePtr = DBC_handlePtr
         var infoValue: UInt32
         unsafe {
-            var infoValuePtr = malloc(UIntNative(4))
+            var infoValuePtr = malloc(LEN_MALLOC_4)
             if (infoValuePtr.isNull()) {
-                throw SqlException("native malloc Failed.")
+                throw SqlException("Native malloc Failed.")
             }
             var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {

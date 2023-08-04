@@ -15,9 +15,9 @@ public class OdbcDatasource <: Datasource {
         this.dateBase = dateBase
         this.userName = userName
         this.password = password
-        DBC_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(8) })
+        DBC_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_MALLOC_8) })
         if (DBC_handlePtr.isNull()) {
-            throw SqlException("native malloc Failed.")
+            throw SqlException("Native malloc Failed.")
         }
 
         var res = unsafe { SQLAllocHandle(SQL_HANDLE_DBC, ENV_handle, DBC_handlePtr) }

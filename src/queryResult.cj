@@ -150,7 +150,10 @@ public class OdbcQueryResult <: QueryResult {
     }
 
     private func readVarColumn(index: Int64, ctype: Int16): DataBuffer {
-        let cbNullTerminator = 0
+        var cbNullTerminator = 1
+        if (ctype == SQL_BINARY || ctype == SQL_VARBINARY || ctype == SQL_LONGVARBINARY) {
+            cbNullTerminator = 0
+        }
 
         var cbAllocated = 4096
         var cbUsed = 0
@@ -158,7 +161,7 @@ public class OdbcQueryResult <: QueryResult {
         if (pb.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var cbData = CPointer<Int64>(unsafe { malloc(8) })
+        var cbData = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (cbData.isNull()) {
             unsafe { free(pb) }
             throw SqlException("Native malloc failed.")
@@ -168,10 +171,10 @@ public class OdbcQueryResult <: QueryResult {
         do {
             var cbAvailable = cbAllocated - cbUsed
             unsafe { cbData.write(0) }
-            ret = unsafe { SQLGetData(this.STMT_handle, index + 1, ctype, pb, cbAllocated, cbData) }
+            ret = unsafe { SQLGetData(this.STMT_handle, index + 1, ctype, pb + cbUsed, cbAllocated, cbData) }
 
             if (!SQLSucceeded(ret) && ret != SQL_NO_DATA) {
-                DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+                DiagnoseException(SQL_HANDLE_STMT, STMT_handle)
                 unsafe {
                     free(pb)
                     free(CPointer<Unit>(cbData))
@@ -301,15 +304,16 @@ public class OdbcQueryResult <: QueryResult {
     private func getBool(index: Int64): Option<Bool> {
         let colValueSize = 1
         var res: Option<Bool> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(1) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_1) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
-        var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_BIT, colValueUnitPtr, colValueSize, sizePtr) }
+        var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_STINYINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
             DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
@@ -340,12 +344,13 @@ public class OdbcQueryResult <: QueryResult {
     private func getInt8(index: Int64): Option<Int8> {
         let colValueSize = 1
         var res: Option<Int8> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(1) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_1) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_STINYINT, colValueUnitPtr, colValueSize, sizePtr) }
@@ -374,12 +379,13 @@ public class OdbcQueryResult <: QueryResult {
     private func getInt16(index: Int64): Option<Int16> {
         let colValueSize = 2
         var res: Option<Int16> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(2) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_2) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SSHORT, colValueUnitPtr, colValueSize, sizePtr) }
@@ -408,12 +414,13 @@ public class OdbcQueryResult <: QueryResult {
     private func getInt32(index: Int64): Option<Int32> {
         let colValueSize = 4
         var res: Option<Int32> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(4) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_4) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SLONG, colValueUnitPtr, colValueSize, sizePtr) }
@@ -442,12 +449,13 @@ public class OdbcQueryResult <: QueryResult {
     private func getInt64(index: Int64): Option<Int64> {
         let colValueSize = 8
         var res: Option<Int64> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(8) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_8) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SBIGINT, colValueUnitPtr, colValueSize, sizePtr) }
@@ -476,12 +484,13 @@ public class OdbcQueryResult <: QueryResult {
     private func getFloat32(index: Int64): Option<Float32> {
         let colValueSize = 4
         var res: Option<Float32> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(4) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_4) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_FLOAT, colValueUnitPtr, colValueSize, sizePtr) }
@@ -510,12 +519,13 @@ public class OdbcQueryResult <: QueryResult {
     private func getFloat64(index: Int64): Option<Float64> {
         let colValueSize = 8
         var res: Option<Float64> = None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(8) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_8) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_DOUBLE, colValueUnitPtr, colValueSize, sizePtr) }
@@ -542,14 +552,15 @@ public class OdbcQueryResult <: QueryResult {
     }
 
     private func getDate(index: Int64): Option<DateTime> {
-        let colValueSize = 16
+        let colValueSize = 6
         var res = Option<DateTime>.None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(6) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_6) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_DATE, colValueUnitPtr, colValueSize, sizePtr) }
@@ -585,14 +596,15 @@ public class OdbcQueryResult <: QueryResult {
     }
 
     private func getTime(index: Int64): Option<DateTime> {
-        let colValueSize = 16
+        let colValueSize = 6
         var res = Option<DateTime>.None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(6) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_6) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIME, colValueUnitPtr, colValueSize, sizePtr) }
@@ -627,17 +639,16 @@ public class OdbcQueryResult <: QueryResult {
         return res
     }
 
-
-
     private func getTimestampWithoutTz(index: Int64): Option<DateTime> {
         let colValueSize = 16
         var res = Option<DateTime>.None
-        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(16) })
+        var colValueUnitPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_16) })
         if (colValueUnitPtr.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var sizePtr = CPointer<Int64>(unsafe { malloc(8) })
+        var sizePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (sizePtr.isNull()) {
+            unsafe { free(colValueUnitPtr) }
             throw SqlException("Native malloc failed.")
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIMESTAMP, colValueUnitPtr, colValueSize, sizePtr) }
@@ -673,7 +684,6 @@ public class OdbcQueryResult <: QueryResult {
     }
 
     public func close(): Unit {
-        println("Result is closed")
     }
 
     public func isClosed(): Bool {

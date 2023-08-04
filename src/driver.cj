@@ -11,9 +11,9 @@ public class OdbcDriver <: Driver {
 
     public init() {
         /* Allocate Environment Handle */
-        this.ENV_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_POINTER) })
+        this.ENV_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_MALLOC_8) })
         if (this.ENV_handlePtr.isNull()) {
-            throw SqlException("native malloc Failed.")
+            throw SqlException("Native malloc Failed.")
         }
         let nullHandle = CPointer<Unit>()
         var ret = unsafe { SQLAllocHandle(SQL_HANDLE_ENV, nullHandle, this.ENV_handlePtr) }

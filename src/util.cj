@@ -146,7 +146,6 @@ let SQL_C_INTERVAL_HOUR_TO_MINUTE: Int16 = 111
 let SQL_C_INTERVAL_HOUR_TO_SECOND: Int16 = 112
 let SQL_C_INTERVAL_MINUTE_TO_SECOND: Int16 = 113
 
-
 /* Lengths */
 let LEN_POINTER: UIntNative = 8
 let LEN_Int32: UIntNative = 4
@@ -181,6 +180,13 @@ let SQL_TXN_READ_UNCOMMITTED: UInt32 = 1
 let SQL_TXN_READ_COMMITTED: UInt32 = 2
 let SQL_TXN_REPEATABLE_READ: UInt32 = 4
 let SQL_TXN_SERIALIZABLE: UInt32 = 8
+
+let LEN_MALLOC_1: UIntNative = 1
+let LEN_MALLOC_2: UIntNative = 2
+let LEN_MALLOC_4: UIntNative = 4
+let LEN_MALLOC_6: UIntNative = 6
+let LEN_MALLOC_8: UIntNative = 8
+let LEN_MALLOC_16: UIntNative = 16
 
 @C
 struct DATE_STRUCT {

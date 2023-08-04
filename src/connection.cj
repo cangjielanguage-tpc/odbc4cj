@@ -37,9 +37,9 @@ public class OdbcConnection <: Connection {
             closed.store(false)
         }
 
-        STMT_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(8) })
+        STMT_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_MALLOC_8) })
         if (STMT_handlePtr.isNull()) {
-            throw SqlException("native malloc Failed.")
+            throw SqlException("Native malloc Failed.")
         }
         ret = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
         if (!SQLSucceeded(ret)) {
@@ -89,7 +89,7 @@ public class OdbcConnection <: Connection {
         unsafe {
             var infoValuePtr = malloc(UIntNative(len))
             if (infoValuePtr.isNull()) {
-                throw SqlException("native malloc Failed.")
+                throw SqlException("Native malloc Failed.")
             }
             var ret = SQLGetInfo(DBC_handlePtr, infoType, infoValuePtr, len, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
