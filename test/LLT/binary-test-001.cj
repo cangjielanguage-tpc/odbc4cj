@@ -29,7 +29,7 @@ public class OdbcTest {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        rowCount = prepareStatement.update([SqlBinary([11,22]), SqlNullableBinary(None)])
+        rowCount = prepareStatement.update([SqlBinary([0,22]), SqlNullableBinary(None)])
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
@@ -37,7 +37,7 @@ public class OdbcTest {
         queryResult.next(arr)
         @Assert("SqlBinary", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
-            case v: SqlBinary => @Assert(true, v.value[..2]==[11, 22])
+            case v: SqlBinary => @Assert(true, v.value[..2]==[0, 22])
             case _ => @Assert("abc", "123")
         }
         @Assert("SqlNullableBinary", queryResult.columnInfos[1].typeName)

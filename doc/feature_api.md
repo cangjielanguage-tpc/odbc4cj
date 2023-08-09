@@ -152,14 +152,12 @@ public class OdbcConnection <: Connection {
     */
     public func createTransaction(): OdbcTransaction
 
-
     /*
     * 关闭连接
     *
     * 返回值 - Unit
     */
     public func close(): Unit
-
 
     /*
     * 判断连接是否关闭
@@ -178,6 +176,7 @@ public class OdbcConnection <: Connection {
 2. 设置预执行 sql 语句选项
 3. 执行 sql 语句，得到更新结果
 4. 执行 sql 语句，得到查询结果
+5. 获取语句句柄
 
 #### 4.2  实现方案
 

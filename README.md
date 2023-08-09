@@ -9,7 +9,6 @@
 <img alt="" src="https://img.shields.io/badge/project-open-brightgreen" style="display: inline-block;" />
 </p>
 
-
 ## 介绍
 
 基于 odbc 实现 database 包。
@@ -19,31 +18,24 @@
 - 🚀 特性1
 
   数据库驱动接口
-
 - 🚀 特性2
 
   数据源接口
-
 - 💪 特性3
 
   数据库连接接口
-
 - 🛠️ 特性4
 
   sql语句预执行接口
-
 - 🌍 特性5
 
   执行Insert、Update、Delete语句产生的结果接口
-
 - 💡  特性6
 
   执行Select/Query语句返回结果的列信息
-
 - 💡  特性7
 
   执行 Select 语句产生的结果接口
-
 - 💡  特性8
 
   数据库事务的核心行为
@@ -94,7 +86,6 @@
 
 主要类和函数接口说明详见 [API](./doc/feature_api.md)
 
-
 ## 使用说明
 
 ### 编译构建
@@ -106,6 +97,7 @@ cjpm build
 ```
 
 ### 功能示例
+
 ```cangjie
 package odbc
 from std import database.sql.*, io.*, time.*, regex.*
@@ -146,6 +138,7 @@ None
 ```
 
 ## 开源协议
+
 MulanPSL-2.0 License
 
 ## 参与贡献

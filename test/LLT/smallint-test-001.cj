@@ -2,7 +2,7 @@
 // EXEC: ./main
 
 package odbc
-from std import database.sql.*, io.*, time.*, regex.*
+from std import database.sql.*, io.*, time.*, regex.*, math.*
 from odbc4cj import odbc.*
 from std import unittest.*
 from std import unittest.testmacro.*
