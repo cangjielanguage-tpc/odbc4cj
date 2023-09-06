@@ -36,20 +36,20 @@ public class OdbcTest {
         tran.rollback()
 
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        rowCount = prepareStatement.update([SqlIntger(456), SqlNullableIntger(None)])
+        rowCount = prepareStatement.update([SqlInteger(456), SqlNullableInteger(None)])
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = queryResult.getSqlDbType()
+        var arr: Array<SqlDbType> = [SqlInteger(456), SqlNullableInteger(None)]
         queryResult.next(arr)
         tran.commit()
-        @Assert("SqlIntger", queryResult.columnInfos[0].typeName)
+        @Assert("SqlInteger", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
-            case v: SqlIntger => @Assert(456, v.value)
+            case v: SqlInteger => @Assert(456, v.value)
             case _ => @Assert("abc", "123")
         }
-        @Assert("SqlNullableIntger", queryResult.columnInfos[1].typeName)
+        @Assert("SqlNullableInteger", queryResult.columnInfos[1].typeName)
         match (arr[1]) {
-            case v: SqlNullableIntger => @Assert(None, v.value)
+            case v: SqlNullableInteger => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
     }

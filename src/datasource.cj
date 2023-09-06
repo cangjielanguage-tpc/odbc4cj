@@ -22,9 +22,9 @@ public class OdbcDatasource <: Datasource {
 
         var res = unsafe { SQLAllocHandle(SQL_HANDLE_DBC, ENV_handle, DBC_handlePtr) }
         if (!SQLSucceeded(res)) {
-            DiagnoseException(SQL_HANDLE_ENV, ENV_handle)
+            var exception = DiagnoseException(SQL_HANDLE_ENV, ENV_handle)
             unsafe { SQLFreeHandle(SQL_HANDLE_ENV, ENV_handle) }
-            throw SqlException("Can't initialize module odbc. SQLAllocDbc failed.")
+            throw exception
         }
 
         for (i in 0..opts.size) {

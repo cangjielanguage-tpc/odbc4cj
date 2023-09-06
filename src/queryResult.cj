@@ -23,81 +23,6 @@ public class OdbcQueryResult <: QueryResult {
         }
     }
 
-    public func getSqlDbType(): Array<SqlDbType> {
-        var arr: Array<SqlDbType> = Array<SqlDbType>(columnInfos.size, item: SqlChar(""))
-        for (i in 0..columnInfos.size) {
-            if (columnInfos[i].typeName == "SqlChar") {
-                arr.set(i, SqlChar(""))
-            } else if (columnInfos[i].typeName == "SqlNullableChar") {
-                arr.set(i, SqlNullableChar(""))
-            } else if (columnInfos[i].typeName == "SqlVarchar") {
-                arr.set(i, SqlVarchar(""))
-            } else if (columnInfos[i].typeName == "SqlNullableVarchar") {
-                arr.set(i, SqlNullableVarchar(""))
-            } else if (columnInfos[i].typeName == "SqlBinary") {
-                arr.set(i, SqlBinary(Array<Byte>()))
-            } else if (columnInfos[i].typeName == "SqlNullableBinary") {
-                arr.set(i, SqlNullableBinary(Array<Byte>()))
-            } else if (columnInfos[i].typeName == "SqlVarBinary") {
-                arr.set(i, SqlVarBinary(Array<Byte>()))
-            } else if (columnInfos[i].typeName == "SqlNullableVarBinary") {
-                arr.set(i, SqlNullableVarBinary(Array<Byte>()))
-            } else if (columnInfos[i].typeName == "SqlClob") {
-                arr.set(i, SqlClob(ByteArrayStream(0)))
-            } else if (columnInfos[i].typeName == "SqlNullableClob") {
-                arr.set(i, SqlNullableClob(ByteArrayStream(0)))
-            } else if (columnInfos[i].typeName == "SqlBlob") {
-                arr.set(i, SqlBlob(ByteArrayStream(0)))
-            } else if (columnInfos[i].typeName == "SqlNullableBlob") {
-                arr.set(i, SqlNullableBlob(ByteArrayStream(0)))
-            } else if (columnInfos[i].typeName == "SqlBool") {
-                arr.set(i, SqlBool(true))
-            } else if (columnInfos[i].typeName == "SqlNullableBool") {
-                arr.set(i, SqlNullableBool(true))
-            } else if (columnInfos[i].typeName == "SqlByte") {
-                arr.set(i, SqlByte(0))
-            } else if (columnInfos[i].typeName == "SqlNullableByte") {
-                arr.set(i, SqlNullableByte(0))
-            } else if (columnInfos[i].typeName == "SqlSmallInt") {
-                arr.set(i, SqlSmallInt(0))
-            } else if (columnInfos[i].typeName == "SqlNullableSmallInt") {
-                arr.set(i, SqlNullableSmallInt(0))
-            } else if (columnInfos[i].typeName == "SqlIntger") {
-                arr.set(i, SqlIntger(0))
-            } else if (columnInfos[i].typeName == "SqlNullableIntger") {
-                arr.set(i, SqlNullableIntger(0))
-            } else if (columnInfos[i].typeName == "SqlBigInt") {
-                arr.set(i, SqlBigInt(0))
-            } else if (columnInfos[i].typeName == "SqlNullableBigInt") {
-                arr.set(i, SqlNullableBigInt(0))
-            } else if (columnInfos[i].typeName == "SqlReal") {
-                arr.set(i, SqlReal(0.0))
-            } else if (columnInfos[i].typeName == "SqlNullableReal") {
-                arr.set(i, SqlNullableReal(0.0))
-            } else if (columnInfos[i].typeName == "SqlDouble") {
-                arr.set(i, SqlDouble(0.0))
-            } else if (columnInfos[i].typeName == "SqlNullableDouble") {
-                arr.set(i, SqlNullableDouble(0.0))
-            } else if (columnInfos[i].typeName == "SqlDate") {
-                arr.set(i, SqlDate(DateTime.now()))
-            } else if (columnInfos[i].typeName == "SqlNullableDate") {
-                arr.set(i, SqlNullableDate(DateTime.now()))
-            } else if (columnInfos[i].typeName == "SqlTime") {
-                arr.set(i, SqlTime(DateTime.now()))
-            } else if (columnInfos[i].typeName == "SqlNullableTime") {
-                arr.set(i, SqlNullableTime(DateTime.now()))
-            } else if (columnInfos[i].typeName == "SqlTimestampWithoutTz") {
-                arr.set(i, SqlTimestampWithoutTz(DateTime.now()))
-            } else if (columnInfos[i].typeName == "SqlNullableTimestampWithoutTz") {
-                arr.set(i, SqlNullableTimestampWithoutTz(DateTime.now()))
-            } else {
-                throw SqlException("Unknown sql type.")
-            }
-        }
-
-        arr
-    }
-
     /**
      * 向后移动一行，必须先调用一次 next 才能移动到第一行，第二次调用移动到第二行，依此类推。
      * 当返回 true 时，驱动会在 values 中填入行数据；当返回 false 时结束，且不会修改 values 的内容。
@@ -128,8 +53,8 @@ public class OdbcQueryResult <: QueryResult {
                     case v: SqlNullableByte => v.value = getInt8(i)
                     case v: SqlSmallInt => v.value = getInt16(i).getOrThrow()
                     case v: SqlNullableSmallInt => v.value = getInt16(i)
-                    case v: SqlIntger => v.value = getInt32(i).getOrThrow()
-                    case v: SqlNullableIntger => v.value = getInt32(i)
+                    case v: SqlInteger => v.value = getInt32(i).getOrThrow()
+                    case v: SqlNullableInteger => v.value = getInt32(i)
                     case v: SqlBigInt => v.value = getInt64(i).getOrThrow()
                     case v: SqlNullableBigInt => v.value = getInt64(i)
                     case v: SqlReal => v.value = getFloat32(i).getOrThrow()
@@ -315,12 +240,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_STINYINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Bool data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -355,12 +280,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_STINYINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Int8 data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -390,12 +315,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SSHORT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle) }
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Int16 data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -425,12 +350,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SLONG, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Int32 data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -460,12 +385,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SBIGINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Int64 data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -495,12 +420,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_FLOAT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Float32 data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -530,12 +455,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_DOUBLE, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get Float64 data failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -565,12 +490,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_DATE, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get date failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -609,12 +534,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIME, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get time failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {
@@ -653,12 +578,12 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIMESTAMP, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
             }
-            throw SqlException("Get timestamp failed.")
+            throw exception
         }
 
         if (unsafe { sizePtr.read() } != SQL_NULL_DATA) {

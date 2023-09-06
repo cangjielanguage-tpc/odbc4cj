@@ -13,7 +13,7 @@ struct ParamInfo {
     var bufferLength: Int64 = 0
     var strLenOrInd: CPointer<Int64> = CPointer<Int64>()
     var isString: Bool = false
-    var string: String = String()
+    var cstring: CString = CString(CPointer<UInt8>())
     var isArrary: Bool = false
     var cptrHand: CPointerHandle<UInt8> = CPointerHandle<UInt8>()
 }
@@ -26,27 +26,67 @@ public class OdbcStatement <: Statement {
     }
 
     /*
-     * 预执行 sql 语句中，占位的参数个数
+     * 预执行sql语句中，占位参数的列信息，比如列名，列类型，列长度，是否允许数据库Null值等
      */
-    public prop parameterCount: Int64 {
+    public prop parameterColumnInfos: Array<ColumnInfo> {
         get() {
-            var ParameterCountPtr = CPointer<Unit>(unsafe { malloc(LEN_MALLOC_2) })
+            var ParameterCountPtr = LibC.malloc<Int16>()
             if (ParameterCountPtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
 
             unsafe {
-                CPointer<Int16>(ParameterCountPtr).write(0)
+                ParameterCountPtr.write(0)
                 var ret = SQLNumParams(STMT_handlePtr, ParameterCountPtr)
                 if (!SQLSucceeded(ret)) {
-                    DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
-                    unsafe { free(ParameterCountPtr) }
-                    throw SqlException("Get parameterCount Failed.")
+                    var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                    unsafe { LibC.free<Int16>(ParameterCountPtr) }
+                    throw exception
                 }
 
-                var res = Int64(CPointer<Int16>(ParameterCountPtr).read())
-                unsafe { free(ParameterCountPtr) }
-                return res
+                var len = CPointer<Int16>(ParameterCountPtr).read()
+                LibC.free<Int16>(ParameterCountPtr)
+
+                if (len != 0) {
+                var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), item: OdbcColumnInfo())
+                var parameterSizePtr = LibC.malloc<Int64>()
+                var dataTypePtr = LibC.malloc<Int16>()
+                var decimalDigitsPtr = LibC.malloc<Int16>()
+                var nullablePtr = LibC.malloc<Int16>()
+                for (i in 0..len) {
+                    var parameterNumber = i + 1
+                    unsafe {
+                        ret = SQLDescribeParam(STMT_handlePtr, parameterNumber, dataTypePtr, parameterSizePtr,
+                                               decimalDigitsPtr, nullablePtr)
+                        if (!SQLSucceeded(ret)) {
+                            var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                            LibC.free<Int64>(parameterSizePtr)
+                            LibC.free<Int16>(dataTypePtr)
+                            LibC.free<Int16>(decimalDigitsPtr)
+                            LibC.free<Int16>(nullablePtr)
+                            throw exception
+                        }
+
+                        var nullable = nullablePtr.read()
+                        var typeName = getSqlTypeName(dataTypePtr.read(), nullable)
+                        var odbcColumnInfo = OdbcColumnInfo("", typeName, parameterSizePtr.read(),
+                                                            decimalDigitsPtr.read(), 0, nullable)
+                        arrInfo[Int64(i)] = odbcColumnInfo
+                    }
+                }
+
+                unsafe {
+                    LibC.free<Int64>(parameterSizePtr)
+                    LibC.free<Int16>(dataTypePtr)
+                    LibC.free<Int16>(decimalDigitsPtr)
+                    LibC.free<Int16>(nullablePtr)
+                }
+
+                return arrInfo
+                } else {
+                    return Array<ColumnInfo>()
+                }
+
             }
         }
     }
@@ -63,8 +103,8 @@ public class OdbcStatement <: Statement {
     public func setOption(key: Int32, value: Int64): Unit {
         var ret = unsafe { SQLSetConnectAttr(STMT_handlePtr, key, value, SQL_IS_INTEGER) }
         if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr) }
-            println("setOption Failed.")
+            var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            throw exception
         }
     }
 
@@ -76,45 +116,7 @@ public class OdbcStatement <: Statement {
     public func update(params: Array<SqlDbType>): OdbcUpdateResult {
         var ret: Int16
         var result: OdbcUpdateResult
-
-        var paramInfo = Array<ParamInfo>(params.size, item: ParamInfo())
-        for (i in 0..params.size) {
-            match (params[i]) {
-                case v: SqlChar => paramInfo[i] = setString(v.value, SQL_CHAR)
-                case v: SqlNullableChar => paramInfo[i] = setString(v.value, SQL_CHAR)
-                case v: SqlVarchar => paramInfo[i] = setString(v.value, SQL_VARCHAR)
-                case v: SqlNullableVarchar => paramInfo[i] = setString(v.value, SQL_VARCHAR)
-                case v: SqlBinary => paramInfo[i] = setBytes(v.value, SQL_BINARY)
-                case v: SqlNullableBinary => paramInfo[i] = setBytes(v.value, SQL_BINARY)
-                case v: SqlVarBinary => paramInfo[i] = setBytes(v.value, SQL_VARBINARY)
-                case v: SqlNullableVarBinary => paramInfo[i] = setBytes(v.value, SQL_VARBINARY)
-                case v: SqlClob => paramInfo[i] = setClob(v.value)
-                case v: SqlNullableClob => paramInfo[i] = setClob(v.value)
-                case v: SqlBlob => paramInfo[i] = setBlob(v.value)
-                case v: SqlNullableBlob => paramInfo[i] = setBlob(v.value)
-                case v: SqlBool => paramInfo[i] = setBool(v.value)
-                case v: SqlNullableBool => paramInfo[i] = setBool(v.value)
-                case v: SqlByte => paramInfo[i] = setInt8(v.value)
-                case v: SqlNullableByte => paramInfo[i] = setInt8(v.value)
-                case v: SqlSmallInt => paramInfo[i] = setInt16(v.value)
-                case v: SqlNullableSmallInt => paramInfo[i] = setInt16(v.value)
-                case v: SqlIntger => paramInfo[i] = setInt32(v.value)
-                case v: SqlNullableIntger => paramInfo[i] = setInt32(v.value)
-                case v: SqlBigInt => paramInfo[i] = setInt64(v.value)
-                case v: SqlNullableBigInt => paramInfo[i] = setInt64(v.value)
-                case v: SqlReal => paramInfo[i] = setFloat32(v.value)
-                case v: SqlNullableReal => paramInfo[i] = setFloat32(v.value)
-                case v: SqlDouble => paramInfo[i] = setFloat64(v.value)
-                case v: SqlNullableDouble => paramInfo[i] = setFloat64(v.value)
-                case v: SqlDate => paramInfo[i] = setDate(v.value)
-                case v: SqlNullableDate => paramInfo[i] = setDate(v.value)
-                case v: SqlTime => paramInfo[i] = setTime(v.value)
-                case v: SqlNullableTime => paramInfo[i] = setTime(v.value)
-                case v: SqlTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
-                case v: SqlNullableTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
-                case _ => throw SqlException("Unsupported data type.")
-            }
-        }
+        var paramInfo = getParamInfo(params)
 
         for (i in 0..params.size) {
             ret = unsafe { SQLBindParameter(STMT_handlePtr,
@@ -153,7 +155,7 @@ public class OdbcStatement <: Statement {
                 if (paramInfo[i].isArrary) {
                     releaseArrayRawData(paramInfo[i].cptrHand)
                 } else if (paramInfo[i].isString) {
-                    paramInfo[i].string.releaseRaw(paramInfo[i].cptrHand)
+                    LibC.free(paramInfo[i].cstring)
                 } else {
                     free(paramInfo[i].parameterValuePtr)
                 }
@@ -169,36 +171,96 @@ public class OdbcStatement <: Statement {
      * 异常 SqlException - 执行过程中发生了异常，比如网络中断，服务器超时，参数个数不正确
      */
     public func query(params: Array<SqlDbType>): OdbcQueryResult {
-        var ret = unsafe { SQLExecute(STMT_handlePtr) }
-        if (SQLSucceeded(ret)) {
-            return generateQueryResult(params)
-        } else {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr) }
-            return unsafe { OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>()) }
+        var ret: Int16
+
+        if (parameterColumnInfos.size > params.size) {
+            throw SqlException("Parameter count isn't ${parameterColumnInfos.size}.")
+        } else if (parameterColumnInfos.size > 0) {
+            var paramInfo = getParamInfo(params)
+            for (i in 0..parameterColumnInfos.size) {
+                ret = unsafe { SQLBindParameter(STMT_handlePtr,
+                                                i + 1,
+                                                SQL_PARAM_INPUT,
+                                                paramInfo[i].valueType,
+                                                paramInfo[i].parameterType,
+                                                paramInfo[i].columnSize,
+                                                paramInfo[i].decimalDigits,
+                                                paramInfo[i].parameterValuePtr,
+                                                paramInfo[i].bufferLength,
+                                                paramInfo[i].strLenOrInd)
+                }
+
+                if (!SQLSucceeded(ret)) {
+                    DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                }
+            }
         }
+
+        ret = unsafe { SQLExecute(STMT_handlePtr) }
+        if (SQLSucceeded(ret)) {
+            return generateQueryResult()
+        } else {
+            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            return OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
+        }
+    }
+
+    private func getParamInfo(params: Array<SqlDbType>): Array<ParamInfo> {
+        var paramInfo = Array<ParamInfo>(params.size, item: ParamInfo())
+        for (i in 0..params.size) {
+            match (params[i]) {
+                case v: SqlChar => paramInfo[i] = setString(v.value, SQL_CHAR)
+                case v: SqlNullableChar => paramInfo[i] = setString(v.value, SQL_CHAR)
+                case v: SqlVarchar => paramInfo[i] = setString(v.value, SQL_VARCHAR)
+                case v: SqlNullableVarchar => paramInfo[i] = setString(v.value, SQL_VARCHAR)
+                case v: SqlBinary => paramInfo[i] = setBytes(v.value, SQL_BINARY)
+                case v: SqlNullableBinary => paramInfo[i] = setBytes(v.value, SQL_BINARY)
+                case v: SqlVarBinary => paramInfo[i] = setBytes(v.value, SQL_VARBINARY)
+                case v: SqlNullableVarBinary => paramInfo[i] = setBytes(v.value, SQL_VARBINARY)
+                case v: SqlClob => paramInfo[i] = setClob(v.value)
+                case v: SqlNullableClob => paramInfo[i] = setClob(v.value)
+                case v: SqlBlob => paramInfo[i] = setBlob(v.value)
+                case v: SqlNullableBlob => paramInfo[i] = setBlob(v.value)
+                case v: SqlBool => paramInfo[i] = setBool(v.value)
+                case v: SqlNullableBool => paramInfo[i] = setBool(v.value)
+                case v: SqlByte => paramInfo[i] = setInt8(v.value)
+                case v: SqlNullableByte => paramInfo[i] = setInt8(v.value)
+                case v: SqlSmallInt => paramInfo[i] = setInt16(v.value)
+                case v: SqlNullableSmallInt => paramInfo[i] = setInt16(v.value)
+                case v: SqlInteger => paramInfo[i] = setInt32(v.value)
+                case v: SqlNullableInteger => paramInfo[i] = setInt32(v.value)
+                case v: SqlBigInt => paramInfo[i] = setInt64(v.value)
+                case v: SqlNullableBigInt => paramInfo[i] = setInt64(v.value)
+                case v: SqlReal => paramInfo[i] = setFloat32(v.value)
+                case v: SqlNullableReal => paramInfo[i] = setFloat32(v.value)
+                case v: SqlDouble => paramInfo[i] = setFloat64(v.value)
+                case v: SqlNullableDouble => paramInfo[i] = setFloat64(v.value)
+                case v: SqlDate => paramInfo[i] = setDate(v.value)
+                case v: SqlNullableDate => paramInfo[i] = setDate(v.value)
+                case v: SqlTime => paramInfo[i] = setTime(v.value)
+                case v: SqlNullableTime => paramInfo[i] = setTime(v.value)
+                case v: SqlTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
+                case v: SqlNullableTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
+                case _ => throw SqlException("Unsupported data type.")
+            }
+        }
+
+        return paramInfo
     }
 
     private func generateUpdateResult(): OdbcUpdateResult {
         var updateResult: OdbcUpdateResult
-        var rowCountPtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
-        if (rowCountPtr.isNull()) {
-            throw SqlException("Native malloc Failed.")
-        }
+        var rowCountPtr = LibC.malloc<Int64>()
         unsafe { rowCountPtr.write(0) }
         var ret = unsafe { SQLRowCount(STMT_handlePtr, rowCountPtr) }
         if (SQLSucceeded(ret)) {
-            if (unsafe { rowCountPtr.read() } > 0) {
-                updateResult = OdbcUpdateResult(unsafe { rowCountPtr.read() })
-                return updateResult
-            } else {
-                updateResult = OdbcUpdateResult(0)
-            }
+            updateResult = OdbcUpdateResult(unsafe { rowCountPtr.read() })
         }  else {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr) }
+            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             updateResult = OdbcUpdateResult(0)
         }
 
-        unsafe { free(CPointer<Unit>(rowCountPtr)) }
+        unsafe { LibC.free<Int64>(rowCountPtr) }
         return updateResult
     }
 
@@ -254,9 +316,9 @@ public class OdbcStatement <: Statement {
             }
         } else if (dataType == SQL_INTEGER) {
             if (nullable == SQL_NO_NULLS) {
-                typeName = "SqlIntger"
+                typeName = "SqlInteger"
             } else {
-                typeName = "SqlNullableIntger"
+                typeName = "SqlNullableInteger"
             }
         } else if (dataType == SQL_BIGINT) {
             if (nullable == SQL_NO_NULLS) {
@@ -301,78 +363,69 @@ public class OdbcStatement <: Statement {
         return typeName
     }
 
-    private func generateQueryResult(params: Array<SqlDbType>): OdbcQueryResult {
+    private func generateQueryResult(): OdbcQueryResult {
         var queryResult: OdbcQueryResult
-        var columnCountPtr = CPointer<Int16>(unsafe { malloc(LEN_MALLOC_2) })
-        if (columnCountPtr.isNull()) {
-            throw SqlException("Native malloc Failed.")
-        }
+        var columnCountPtr = unsafe { LibC.malloc<Int16>() }
 
         var ret = unsafe { SQLNumResultCols(STMT_handlePtr, columnCountPtr) }
         if (SQLSucceeded(ret)) {
             var columnCount = unsafe { columnCountPtr.read() }
             if (columnCount > 0) {
                 var arrOdbcColumnInfo = Array<OdbcColumnInfo>(Int64(columnCount), item: OdbcColumnInfo())
+                var bufferLength: Int16 = 1024
+                var columnNamePtr = LibC.malloc<UInt8>(count: Int64(bufferLength))
+                var columnName = CString(columnNamePtr)
+                var nameLengthPtr = LibC.malloc<Int16>()
+                var dataTypePtr = LibC.malloc<Int16>()
+                var columnSizePtr = LibC.malloc<Int64>()
+                var decimalDigitsPtr = LibC.malloc<Int16>()
+                var nullablePtr = LibC.malloc<Int16>()
                 for (i in 0..columnCount) {
                     var columnNumber = i + 1
-                    var columnNamePtr: CPointer<UInt8>
-                    var columnName: CString
-                    var bufferLength: Int16 = 1024
-                    var nameLengthPtr: CPointer<Int16>
-                    var dataTypePtr: CPointer<Int16>
-                    var columnSizePtr: CPointer<Int64>
-                    var decimalDigitsPtr: CPointer<Int16>
-                    var nullablePtr: CPointer<Int16>
                     unsafe {
-                        columnNamePtr = CPointer<UInt8>(malloc(1024))
-                        columnName = CString(columnNamePtr)
-                        nameLengthPtr = CPointer<Int16>(malloc(2))
-                        dataTypePtr = CPointer<Int16>(malloc(2))
-                        columnSizePtr = CPointer<Int64>(malloc(8))
-                        decimalDigitsPtr = CPointer<Int16>(malloc(2))
-                        nullablePtr = CPointer<Int16>(malloc(2))
                         ret = SQLDescribeCol(STMT_handlePtr, columnNumber, columnName, bufferLength, nameLengthPtr,
                                              dataTypePtr, columnSizePtr, decimalDigitsPtr, nullablePtr)
                         if (SQLSucceeded(ret)) {
                             var typeName: String
                             var dataType = dataTypePtr.read()
                             var nullable: Int16
-                            if (!params.isEmpty()) {
-                                typeName = params[Int64(i)].name
-                                if (typeName.contains("SqlNullable")) {
-                                    nullable = SQL_NULLABLE
-                                } else {
-                                    nullable = SQL_NO_NULLS
-                                }
-                            } else {
-                                nullable = nullablePtr.read()
-                                typeName = getSqlTypeName(dataType, nullable)
-                            }
+                            nullable = nullablePtr.read()
+                            typeName = getSqlTypeName(dataType, nullable)
                             var odbcColumnInfo = OdbcColumnInfo(columnName.toString(), typeName, columnSizePtr.read(),
                                                                 decimalDigitsPtr.read(), 0, nullable)
                             arrOdbcColumnInfo[Int64(i)] = odbcColumnInfo
-                            free(CPointer<Unit>(columnNamePtr))
-                            free(CPointer<Unit>(nameLengthPtr))
-                            free(CPointer<Unit>(dataTypePtr))
-                            free(CPointer<Unit>(columnSizePtr))
-                            free(CPointer<Unit>(decimalDigitsPtr))
-                            free(CPointer<Unit>(nullablePtr))
                         } else {
-                            unsafe { DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr) }
+                            LibC.free<UInt8>(columnNamePtr)
+                            LibC.free<Int16>(nameLengthPtr)
+                            LibC.free<Int16>(dataTypePtr)
+                            LibC.free<Int64>(columnSizePtr)
+                            LibC.free<Int16>(decimalDigitsPtr)
+                            LibC.free<Int16>(nullablePtr)
+                            var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                            throw exception
                         }
                     }
                 }
+
+                unsafe {
+                    LibC.free<UInt8>(columnNamePtr)
+                    LibC.free<Int16>(nameLengthPtr)
+                    LibC.free<Int16>(dataTypePtr)
+                    LibC.free<Int64>(columnSizePtr)
+                    LibC.free<Int16>(decimalDigitsPtr)
+                    LibC.free<Int16>(nullablePtr)
+                }
                 queryResult = OdbcQueryResult(STMT_handlePtr, arrOdbcColumnInfo)
             } else {
-                unsafe { DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr) }
+                DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
                 queryResult = OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
             }
         }  else {
-            unsafe { DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr) }
+            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             queryResult = OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
         }
 
-        unsafe { free(CPointer<Unit>(columnCountPtr)) }
+        unsafe { LibC.free(columnCountPtr) }
         return queryResult
     }
 
@@ -388,16 +441,16 @@ public class OdbcStatement <: Statement {
 
         if (value != None) {
             let realValue: String = value ?? "\0"
-            var cptrHandle = unsafe { realValue.getRaw() }
-            var pParameter = unsafe { cptrHandle.pointer }
-            var parameterValuePtr = CPointer<Unit>(pParameter)
+            var cstr = unsafe { LibC.mallocCString(realValue) }
+            var bufferLength = cstr.size()
+            var parameterValuePtr = CPointer<Unit>(cstr.getChars())
             unsafe { strLenOrInd.write(Int64(SQL_NTS)) }
 
-            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            info.parameterValuePtr = parameterValuePtr
+            info.bufferLength = bufferLength
             info.strLenOrInd = strLenOrInd
             info.isString = true
-            info.string = realValue
-            info.cptrHand = cptrHandle
+            info.cstring = cstr
         } else {
             unsafe { strLenOrInd.write(SQL_NULL_DATA) }
             info.strLenOrInd = strLenOrInd
@@ -453,15 +506,18 @@ public class OdbcStatement <: Statement {
                 let realValue: InputStream = v
                 var arr = Array<Byte>(realValue.length, item: 0)
                 realValue.read(arr)
-                var cptrHandle = unsafe { acquireArrayRawData(arr) }
-                var parameterValuePtr = cptrHandle.pointer
+                var parameterValuePtr = LibC.malloc<UInt8>(count: arr.size + 1)
+                for (i in 0..arr.size) {
+                    unsafe { parameterValuePtr.write(i, arr[i]) }
+                }
+                 unsafe { parameterValuePtr.write(arr.size, 0) }
                 unsafe { strLenOrInd.write(Int64(SQL_NTS)) }
 
                 info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
-                info.bufferLength = arr.size + 1
+                info.bufferLength = arr.size
                 info.strLenOrInd = strLenOrInd
-                info.isArrary = true
-                info.cptrHand = cptrHandle
+                info.isString = true
+                info.cstring = CString(parameterValuePtr)
             case None =>
                 unsafe { strLenOrInd.write(SQL_NULL_DATA) }
                 info.strLenOrInd = strLenOrInd

@@ -6,7 +6,7 @@ package odbc
 
 public class OdbcTransaction <: Transaction {
     private var DBC_handlePtr: CPointer<Unit>
-    public var level: TransactionIsoLevel = Default
+    public var level: TransactionIsoLevel = Unspecified
     public var myAccessMode: TransactionAccessMode = ReadWrite
     public var myDeferrableMode: TransactionDeferrableMode = NotDeferrable
 
@@ -29,7 +29,8 @@ public class OdbcTransaction <: Transaction {
             }
             var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER) }
             if (!SQLSucceeded(ret)) {
-                unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                throw exception
             }
 
             level = value
@@ -72,9 +73,9 @@ public class OdbcTransaction <: Transaction {
             }
             var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
-                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 free(infoValuePtr)
-                throw SqlException("SQLGetInfo failed.")
+                throw exception
             }
             infoValue = CPointer<UInt32>(infoValuePtr).read()
             free(infoValuePtr)
@@ -100,7 +101,8 @@ public class OdbcTransaction <: Transaction {
         /* Set autocommit attribute */
         var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER) }
         if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            throw exception
         }
     }
 
@@ -112,7 +114,8 @@ public class OdbcTransaction <: Transaction {
     public func commit(): Unit {
         var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT) }
         if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            throw exception
         }
     }
 
@@ -124,7 +127,8 @@ public class OdbcTransaction <: Transaction {
     public func rollback(): Unit {
         var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_ROLLBACK) }
         if (!SQLSucceeded(ret)) {
-            unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr) }
+            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            throw exception
         }
     }
 

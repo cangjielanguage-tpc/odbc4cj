@@ -29,15 +29,16 @@ public class OdbcTest {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        rowCount = prepareStatement.update([SqlVarchar("abc"), SqlNullableVarchar(None)])
+        rowCount = prepareStatement.update([SqlVarchar("12345678"), SqlNullableVarchar(None)])
+        println(rowCount.rowCount)
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = queryResult.getSqlDbType()
+        var arr: Array<SqlDbType> = [SqlVarchar("abc"), SqlNullableVarchar(None)]
         queryResult.next(arr)
         @Assert("SqlVarchar", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
-            case v: SqlVarchar => @Assert("abc", v.value)
+            case v: SqlVarchar => @Assert("12345678", v.value)
             case _ => @Assert("abc", "123")
         }
         @Assert("SqlNullableVarchar", queryResult.columnInfos[1].typeName)
