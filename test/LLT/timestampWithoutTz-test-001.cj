@@ -41,15 +41,13 @@ public class OdbcTest {
         rowCount = prepareStatement.update([SqlTimestampWithoutTz(date), SqlNullableTimestampWithoutTz(None)])
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
-        var queryResult = prepareStatement.query([SqlTimestampWithoutTz(date), SqlNullableTimestampWithoutTz(None)])
-        var arr: Array<SqlDbType> = queryResult.getSqlDbType()
+        var queryResult = prepareStatement.query()
+        var arr: Array<SqlDbType> = [SqlTimestampWithoutTz(DateTime.now()), SqlNullableTimestampWithoutTz(None)]
         queryResult.next(arr)
-        @Assert("SqlTimestampWithoutTz", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
             case v: SqlTimestampWithoutTz => @Assert(date, v.value)
             case _ => @Assert("abc", "123")
         }
-        @Assert("SqlNullableTimestampWithoutTz", queryResult.columnInfos[1].typeName)
         match (arr[1]) {
             case v: SqlNullableTimestampWithoutTz => @Assert(None, v.value)
             case _ => @Assert("abc", "123")

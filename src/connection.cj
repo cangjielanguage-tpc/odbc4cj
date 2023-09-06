@@ -28,11 +28,9 @@ public class OdbcConnection <: Connection {
         }
 
         if (!SQLSucceeded(ret)) {
-            unsafe {
-                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
-            }
-            throw SqlException("Can't initialize module odbc. SQLDriverConnect failed.")
+            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
+            throw exception
         } else {
             closed.store(false)
         }
@@ -43,11 +41,9 @@ public class OdbcConnection <: Connection {
         }
         ret = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
         if (!SQLSucceeded(ret)) {
-            unsafe {
-                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
-                throw SqlException("Can't initialize module odbc. SQLAllocStmt failed.")
-            }
+            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
+            throw exception
         }
     }
 
@@ -93,9 +89,9 @@ public class OdbcConnection <: Connection {
             }
             var ret = SQLGetInfo(DBC_handlePtr, infoType, infoValuePtr, len, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
-                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 free(infoValuePtr)
-                throw SqlException("SQLGetInfo failed.")
+                throw exception
             }
             if (len == 2) {
                 infoValue = CPointer<UInt16>(infoValuePtr).read().toString()
@@ -127,7 +123,8 @@ public class OdbcConnection <: Connection {
             var ret = SQLPrepare(STMT_handlePtr.read(), csql, csql.size())
             LibC.free(csql)
             if (!SQLSucceeded(ret)) {
-                DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                throw exception
             }
             return statement
         }

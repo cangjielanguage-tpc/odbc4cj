@@ -31,7 +31,6 @@
 #### 1.1 特性介绍
 
 1. 初始化接口
-
 2. 打开数据源
 
 #### 1.2 实现方案
@@ -48,7 +47,7 @@ public class OdbcDriver <: Driver {
     *
     * 参数 - connectionString 数据库连接字符串
     * 参数 - opts 打开数据源的选项
-    * 
+    *
     * 返回值 - OdbcDatasource  数据源
     */
     public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource
@@ -69,7 +68,7 @@ public class OdbcDriver <: Driver {
 public class OdbcDatasource <: Datasource {
     /*
     * 初始化接口
-    * 
+    *
     * 参数 - ENV_handle 环境句柄
     * 参数 - dateBase 数据库名
     * 参数 - userName 用户名
@@ -80,7 +79,7 @@ public class OdbcDatasource <: Datasource {
 
     /*
     * 设置连接选项
-    * 
+    *
     * 参数 - key 属性ID
     * 参数 - value 属性值
     *
@@ -114,7 +113,7 @@ public class OdbcDatasource <: Datasource {
 public class OdbcConnection <: Connection {
    /*
     * 初始化接口
-    * 
+    *
     * 参数 - DBC_handlePtr 数据源句柄
     * 参数 - dateBase 数据库名
     * 参数 - userName 用户名
@@ -124,7 +123,7 @@ public class OdbcConnection <: Connection {
 
     /*
     * 返回有关与连接关联的驱动程序和数据源的常规信息，请参考 odbc 接口文档
-    * 
+    *
     * 参数 - infoType 信息类型
     * 参数 - len 信息长度
     *        UInt16: len = 2
@@ -138,7 +137,7 @@ public class OdbcConnection <: Connection {
 
     /*
     * 通过传入的 sql 语句，返回一个预执行的 Statement 对象实例
-    * 
+    *
     * 参数 - sql sql语句
     *
     * 返回值 - OdbcStatement
@@ -184,14 +183,14 @@ public class OdbcConnection <: Connection {
 public class OdbcStatement <: Statement {
     /*
     * 初始化接口
-    * 
+    *
     * 参数 - DBC_handlePtr 数据源句柄
     */
     public init(DBC_handle: CPointer<Unit>)
-    
+
     /*
     * 设置预执行 sql 语句选项
-    * 
+    *
     * 参数 - key 属性ID
     * 参数 - value 属性值
     *
@@ -201,7 +200,7 @@ public class OdbcStatement <: Statement {
 
     /*
     * 执行 sql 语句，得到更新结果
-    * 
+    *
     * 参数 - params SqlDbType数组
     *
     * 返回值 - OdbcUpdateResult
@@ -210,13 +209,13 @@ public class OdbcStatement <: Statement {
 
     /*
     * 执行 sql 语句，得到查询结果
-    * 
+    *
     * 参数 - params SqlDbType数组
     *
     * 返回值 - QueryResult
     */
     public func query(params: Array<SqlDbType>): QueryResult
-    
+
     /*
     * 获取语句句柄
     *
@@ -226,7 +225,7 @@ public class OdbcStatement <: Statement {
 }
 ```
 
-### 5 执行Insert、Update、Delete语句产生的结果接口
+### 5 执行 Insert、Update、Delete 语句产生的结果接口
 
 #### 5.1 特性介绍
 
@@ -241,7 +240,7 @@ public class OdbcUpdateResult <: UpdateResult {
 }
 ```
 
-### 6 执行Select/Query语句返回结果的列信息
+### 6 执行 Select/Query 语句返回结果的列信息
 
 #### 6.1 特性介绍
 
@@ -250,7 +249,7 @@ public class OdbcUpdateResult <: UpdateResult {
 ```
 public class OdbcColumnInfo <: ColumnInfo {
     // 列名或者别名
-    public prop name: String 
+    public prop name: String
 
     // 列类型名称，如果在 SqlDataType 中定义，返回 SqlDataType.toString(), 如果未在 SqlDataType 中定义，由数据库驱动定义
     public prop typeName: String
@@ -291,22 +290,15 @@ public class OdbcColumnInfo <: ColumnInfo {
 public class OdbcQueryResult <: QueryResult {
     /*
     * 初始化接口
-    * 
+    *
     * 参数 - STMT_handle 语句句柄
     * 参数 - resultCount 列信息
     */
     public init(STMT_handle: CPointer<Unit>, resultCount: Array<OdbcColumnInfo>)
 
     /*
-    * 获取数据类型
-    *
-    * 返回值 - Array<SqlDbType>
-    */
-    public func getSqlDbType(): Array<SqlDbType>
-
-    /*
     * 向后移动一行，必须先调用一次 next 才能移动到第一行，第二次调用移动到第二行，依此类推
-    * 
+    *
     * 参数 - values SqlDbType数组
     *
     * 返回值 - Bool
@@ -330,30 +322,30 @@ public class OdbcQueryResult <: QueryResult {
 public class OdbcTransaction <: Transaction {
     /*
     * 初始化接口
-    * 
+    *
     * 参数 - STMT_handle 数据源句柄
-    * 
+    *
     * 返回值 - Unit
     */
-    public init(DBC_handlePtr: CPointer<Unit>) 
+    public init(DBC_handlePtr: CPointer<Unit>)
 
     /*
     * 开始数据库事务
-    * 
+    *
     * 返回值 - Unit
     */
     public func begin(): Unit
 
     /*
     * 提交数据库事务
-    * 
+    *
     * 返回值 - Unit
     */
     public func commit(): Unit
 
     /*
     * 从挂起状态回滚事务
-    * 
+    *
     * 返回值 - Unit
     */
     public func commit(): Unit

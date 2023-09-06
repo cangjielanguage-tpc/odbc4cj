@@ -42,7 +42,7 @@ public class OdbcTest {
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = queryResult.getSqlDbType()
+        var arr: Array<SqlDbType> = [SqlDate(date), SqlNullableDate(None)]
         queryResult.next(arr)
         @Assert("SqlDate", queryResult.columnInfos[0].typeName)
         match (arr[0]) {

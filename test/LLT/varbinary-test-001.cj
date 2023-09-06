@@ -33,7 +33,7 @@ public class OdbcTest {
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = queryResult.getSqlDbType()
+        var arr: Array<SqlDbType> = [SqlVarBinary([11,22]), SqlNullableVarBinary(None)]
         queryResult.next(arr)
         @Assert("SqlVarBinary", queryResult.columnInfos[0].typeName)
         match (arr[0]) {

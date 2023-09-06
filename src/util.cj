@@ -218,7 +218,7 @@ struct DataBuffer {
     var len: Int64 = 0
 }
 
-func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): Unit {
+func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException {
     var sqlstatePtr = unsafe { malloc(LEN_SQLSTATE) }
     if (sqlstatePtr.isNull()) {
         throw SqlException("Native malloc failed.")
@@ -249,6 +249,7 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): Unit {
     var msgLen = Int16(LEN_MESSAGE)
     var i: Int16 = 1
     var ret: Int16
+    var sqlException: SqlException = SqlException()
 
     do {
         unsafe {
@@ -259,12 +260,11 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): Unit {
         }
 
         ret = unsafe { SQLGetDiagRec(HandleType, Handle, i, sqlstatePtr, nativeErrorPtr, messageText, msgLen, totalBytesPtr) }
-
-        var totalBytes = unsafe { CPointer<Int16>(totalBytesPtr).read() }
         if (ret == SQL_NO_DATA) {
             break
         }
 
+        var totalBytes = unsafe { CPointer<Int16>(totalBytesPtr).read() }
         if (SQLSucceeded(ret) && totalBytes > msgLen - 1) {
             msgLen = totalBytes + 1
             var msgPtr = unsafe { realloc(messageText, Int64(msgLen)) }
@@ -291,8 +291,7 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): Unit {
         var text = CString(CPointer<UInt8>(messageText))
         var nativeError = unsafe { CPointer<Int32>(nativeErrorPtr).read() }
         var sqlstate = CString(CPointer<UInt8>(sqlstatePtr))
-        println("${sqlstate.toString()}: ${text.toString()} (${nativeError})")
-
+        sqlException = SqlException(sqlstate.toString(), text.toString(), Int64(nativeError))
         i++
 
     } while (ret != SQL_NO_DATA)
@@ -303,6 +302,8 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): Unit {
         free(messageText)
         free(totalBytesPtr)
     }
+
+    return sqlException
 }
 
 func SQLSucceeded(res: Int16): Bool {
