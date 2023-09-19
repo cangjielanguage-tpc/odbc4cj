@@ -3,6 +3,11 @@
 from std import database.sql.*, io.*, time.*, regex.*
 from odbc4cj import odbc.*
 
+@When[os == "windows"]
+var str = "myodbc8a.dll"
+@When[os != "windows"]
+var str = "libmyodbc8a.so"
+
 @Test
 public class OdbcTest {
     init() {
@@ -13,7 +18,7 @@ public class OdbcTest {
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
         var name = conn.getInfo(6, 200)
-        @Assert("libmyodbc8a.so", name)
+        @Assert(str, name)
         conn.getInfo(116, 2)
         conn.getInfo(169, 4)
         try {
