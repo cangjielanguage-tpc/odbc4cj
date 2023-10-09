@@ -7,6 +7,11 @@ from odbc4cj import odbc.*
 from std import unittest.*
 from std import unittest.testmacro.*
 
+@When[os == "windows"]
+var str = "myodbc8a.dll"
+@When[os != "windows"]
+var str = "libmyodbc8a.so"
+
 main(): Int64 {
     let filterResultTest: OdbcTest = OdbcTest()
 
@@ -23,7 +28,7 @@ public class OdbcTest {
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
         var name = conn.getInfo(6, 200)
-        @Assert("libmyodbc8a.so", name)
+        @Assert(str, name)
         conn.getInfo(116, 2)
         conn.getInfo(169, 4)
         try {
