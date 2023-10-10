@@ -25,7 +25,7 @@ public class OdbcTest {
         var prepareStatement = conn.prepareStatement("drop table if exists test")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test(data varchar(20) NOT NULL, datanull varchar(20))")
+        prepareStatement = conn.prepareStatement("create table test(data varchar(50) NOT NULL, datanull varchar(20))")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")

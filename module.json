@@ -1,5 +1,5 @@
 {
-	"cjc_version": "0.39.7",
+	"cjc_version": "0.39.8",
 	"organization": "cangjie",
 	"name": "odbc4cj",
 	"description": "nothing here",
@@ -13,5 +13,5 @@
 		}
 	},
 	"output_type": "dynamic",
-	"command_option": "-O2"
+	"command_option": "-O2 -Woff unused"
 }

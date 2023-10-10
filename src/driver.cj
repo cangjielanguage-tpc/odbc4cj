@@ -68,17 +68,17 @@ public class OdbcDriver <: Driver {
     public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {
         var dateBase = ""
         var userName = ""
-        var password = ""
+        var pd = ""
 
         var arr = connectionString.split(';')
         if (arr.size != 3) {
-            throw SqlException("Url is error, example: DATABASE=sql;UID=abc;PWD=123")
+            throw SqlException("Url is error")
         }
 
         for (i in 0..3) {
             var list = arr[i].split('=')
             if (list.size != 2) {
-                throw SqlException("Url is error, example: DATABASE=sql;UID=abc;PWD=123")
+                throw SqlException("Url is error")
             }
 
             if (list[0].equals("DATABASE")) {
@@ -86,12 +86,12 @@ public class OdbcDriver <: Driver {
             } else if (list[0].equals("UID")) {
                 userName = list[1]
             } else if (list[0].equals("PWD")) {
-                password = list[1]
+                pd = list[1]
             } else {
-                throw SqlException("Url is error, example: DATABASE=sql;UID=abc;PWD=123")
+                throw SqlException("Url is error")
             }
         }
 
-        return unsafe { OdbcDatasource(ENV_handlePtr.read(), dateBase, userName, password, opts) }
+        return unsafe { OdbcDatasource(ENV_handlePtr.read(), dateBase, userName, pd, opts) }
     }
 }
