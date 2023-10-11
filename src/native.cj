@@ -10,7 +10,6 @@ foreign {
     func malloc(size: UIntNative): CPointer<Unit>
     func realloc(ptr: CPointer<Unit>, size: Int64): CPointer<Unit>
     func free(ptr: CPointer<Unit>): Unit
-    func memset(ptr: CPointer<Unit>, val: Int8, size: UIntNative): Unit
 
     /* Driver.openDb */
     func SQLAllocHandle(HandleType: Int16, InputHandle: CPointer<Unit>, OutputHandle: CPointer<CPointer<Unit>>): Int16
