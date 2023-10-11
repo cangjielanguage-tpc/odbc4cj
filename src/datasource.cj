@@ -35,11 +35,11 @@ public class OdbcDatasource <: Datasource {
                     if (!SQLSucceeded(ret)) {
                         unsafe { DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr.read()) }
                     }
-                } else if (opts[i][1] == "SQL_AUTOCOMMIT_ON") {
-                    println("SQL_ATTR_AUTOCOMMIT value must be SQL_AUTOCOMMIT_OFF or SQL_AUTOCOMMIT_ON")
+                } else if (opts[i][1] != "SQL_AUTOCOMMIT_ON") {
+                    throw SqlException("SQL_ATTR_AUTOCOMMIT value must be SQL_AUTOCOMMIT_OFF or SQL_AUTOCOMMIT_ON")
                 }
             } else {
-                println("Only supported SQL_ATTR_AUTOCOMMIT.")
+                throw SqlException("Only supported SQL_ATTR_AUTOCOMMIT.")
             }
         }
     }
