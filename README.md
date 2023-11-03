@@ -126,13 +126,17 @@ main() {
         case _ => ()
     }
 }
+```
 
+编译执行：
 
+```
+cjc --import-path build  -Lbuild/odbc4cj -l myodbc8a -l odbc4cj_odbc  testExample1.cj -o main
 ```
 
 执行结果如下：
 
-```shell
+```
 12345
 None
 ```
