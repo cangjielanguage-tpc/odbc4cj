@@ -138,7 +138,6 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public func save(savePointName: String): Unit {
-
     }
 
     /*
@@ -146,8 +145,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func rollback(savepointName: String): Unit {
-
+    public func rollback(savePointName: String): Unit {
     }
 
     /*
@@ -156,6 +154,5 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public func release(savePointName: String): Unit {
-
     }
 }

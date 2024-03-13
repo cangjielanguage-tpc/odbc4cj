@@ -15,7 +15,7 @@ public class OdbcDatasource <: Datasource {
         this.dateBase = dateBase
         this.userName = userName
         this.password = password
-        DBC_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_MALLOC_8) })
+        DBC_handlePtr = LibC.malloc<CPointer<Unit>>()
         if (DBC_handlePtr.isNull()) {
             throw SqlException("Native malloc Failed.")
         }

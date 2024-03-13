@@ -35,7 +35,7 @@ public class OdbcConnection <: Connection {
             closed.store(false)
         }
 
-        STMT_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_MALLOC_8) })
+        STMT_handlePtr = LibC.malloc<CPointer<Unit>>()
         if (STMT_handlePtr.isNull()) {
             throw SqlException("Native malloc Failed.")
         }
@@ -83,14 +83,14 @@ public class OdbcConnection <: Connection {
             throw SqlException("len is not 2, 4 or >=8.")
         }
         unsafe {
-            var infoValuePtr = malloc(UIntNative(len))
+            var infoValuePtr = LibC.malloc<Int8>(count: Int64(len))
             if (infoValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-            var ret = SQLGetInfo(DBC_handlePtr, infoType, infoValuePtr, len, CPointer<Unit>())
+            var ret = SQLGetInfo(DBC_handlePtr, infoType, CPointer<Unit>(infoValuePtr), len, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
                 var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                free(infoValuePtr)
+                LibC.free(infoValuePtr)
                 throw exception
             }
             if (len == 2) {
@@ -103,7 +103,7 @@ public class OdbcConnection <: Connection {
                 infoValue = CString(CPointer<UInt8>(infoValuePtr)).toString()
             }
 
-            free(infoValuePtr)
+            LibC.free(infoValuePtr)
         }
 
         return infoValue

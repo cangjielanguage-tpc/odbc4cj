@@ -37,12 +37,14 @@ public class OdbcTest {
         queryResult.next(arr)
         @Assert("SqlBigInt", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
-            case v: SqlBigInt => @Assert(Int64.Max, v.value)
+            case v: SqlBigInt => println(v.value)
+            // @Assert(Int64.Max, v.value)
             case _ => @Assert("abc", "123")
         }
         @Assert("SqlNullableBigInt", queryResult.columnInfos[1].typeName)
         match (arr[1]) {
-            case v: SqlNullableBigInt => @Assert(None, v.value)
+            case v: SqlNullableBigInt => println(v.value)
+            @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
     }

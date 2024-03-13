@@ -11,7 +11,7 @@ public class OdbcDriver <: Driver {
 
     public init() {
         /* Allocate Environment Handle */
-        this.ENV_handlePtr = CPointer<CPointer<Unit>>(unsafe { malloc(LEN_MALLOC_8) })
+        this.ENV_handlePtr = LibC.malloc<CPointer<Unit>>()
         if (this.ENV_handlePtr.isNull()) {
             throw SqlException("Native malloc Failed.")
         }
@@ -70,22 +70,22 @@ public class OdbcDriver <: Driver {
         var userName = ""
         var pd = ""
 
-        var arr = connectionString.split(';')
+        var arr = connectionString.split(";")
         if (arr.size != 3) {
             throw SqlException("Url is error")
         }
 
         for (i in 0..3) {
-            var list = arr[i].split('=')
+            var list = arr[i].split("=")
             if (list.size != 2) {
                 throw SqlException("Url is error")
             }
 
-            if (list[0].equals("DATABASE")) {
+            if (list[0] == "DATABASE") {
                 dateBase = list[1]
-            } else if (list[0].equals("UID")) {
+            } else if (list[0] == "UID") {
                 userName = list[1]
-            } else if (list[0].equals("PWD")) {
+            } else if (list[0] == "PWD") {
                 pd = list[1]
             } else {
                 throw SqlException("Url is error")

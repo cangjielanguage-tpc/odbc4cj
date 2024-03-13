@@ -82,13 +82,13 @@ public class OdbcQueryResult <: QueryResult {
 
         var cbAllocated = 4096
         var cbUsed = 0
-        var pb = CPointer<Unit>(unsafe { malloc(UIntNative(cbAllocated)) })
+        var pb = CPointer<Unit>(LibC.malloc<Int8>(count: cbAllocated))
         if (pb.isNull()) {
             throw SqlException("Native malloc failed.")
         }
-        var cbData = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        var cbData = LibC.malloc<Int64>()
         if (cbData.isNull()) {
-            unsafe { free(pb) }
+            unsafe { LibC.free(pb) }
             throw SqlException("Native malloc failed.")
         }
         var ret = SQL_SUCCESS_WITH_INFO
@@ -101,8 +101,8 @@ public class OdbcQueryResult <: QueryResult {
             if (!SQLSucceeded(ret) && ret != SQL_NO_DATA) {
                 DiagnoseException(SQL_HANDLE_STMT, STMT_handle)
                 unsafe {
-                    free(pb)
-                    free(CPointer<Unit>(cbData))
+                    LibC.free(pb)
+                    LibC.free(cbData)
                 }
                 return DataBuffer()
             }
@@ -134,8 +134,8 @@ public class OdbcQueryResult <: QueryResult {
                     var ptr = unsafe { realloc(pb, cbNeed) }
                     if (ptr.isNull()) {
                         unsafe {
-                            free(CPointer<Unit>(pb))
-                            free(CPointer<Unit>(cbData))
+                            LibC.free(pb)
+                            LibC.free(cbData)
                         }
                         throw SqlException("Native realloc failed.")
                     }
@@ -152,12 +152,12 @@ public class OdbcQueryResult <: QueryResult {
             var buffer = DataBuffer()
             buffer.data = pb
             buffer.len = cbUsed
-            unsafe { free(CPointer<Unit>(cbData)) }
+            unsafe { LibC.free(cbData) }
             return buffer
         } else {
             unsafe {
-                free(pb)
-                free(CPointer<Unit>(cbData))
+                LibC.free(pb)
+                LibC.free(cbData)
             }
             return DataBuffer()
         }
@@ -170,7 +170,7 @@ public class OdbcQueryResult <: QueryResult {
         } else {
             var colValue = CString(CPointer<UInt8>(buffer.data))
             var ret = Some(colValue.toString())
-            unsafe { free(buffer.data) }
+            unsafe { LibC.free(buffer.data) }
             return ret
         }
     }
@@ -185,7 +185,7 @@ public class OdbcQueryResult <: QueryResult {
             for (i in 0..buffer.len) {
                 arr[i] = unsafe { colValuePtr.read(i) }
             }
-            unsafe { free(buffer.data) }
+            unsafe { LibC.free(buffer.data) }
             return Some(arr)
         }
     }
@@ -201,7 +201,7 @@ public class OdbcQueryResult <: QueryResult {
                 arr[i] = unsafe { colValuePtr.read(i) }
             }
 
-            unsafe { free(buffer.data) }
+            unsafe { LibC.free(buffer.data) }
             var stream = ByteArrayStream()
             stream.write(arr)
             return Some(stream)
@@ -219,7 +219,7 @@ public class OdbcQueryResult <: QueryResult {
                 arr[i] = unsafe { colValuePtr.read(i) }
             }
 
-            unsafe { free(buffer.data) }
+            unsafe { LibC.free(buffer.data) }
             var stream = ByteArrayStream()
             stream.write(arr)
             return Some(stream)
