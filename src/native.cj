@@ -20,8 +20,8 @@ foreign {
     func SQLDriverConnect(ConnectionHandle: CPointer<Unit>, WindowHandle: CPointer<Unit>, InConnectionString: CString,
                           StringLength1: Int16, OutConnectionString: CString, BufferLength: Int16, StringLength2Ptr: CString,
                           DriverCompletion: Int16): Int16
-    func SQLGetDiagRec(HandleType: Int16, Handle: CPointer<Unit>, RecNumber: Int16, Sqlstate: CPointer<Unit>,
-                       NativeError: CPointer<Unit>, MessageText: CPointer<Unit>, BufferLength: Int16, TextLength: CPointer<Unit>): Int16
+    func SQLGetDiagRec(HandleType: Int16, Handle: CPointer<Unit>, RecNumber: Int16, Sqlstate: CPointer<Int8>,
+                       NativeError: CPointer<Int32>, MessageText: CPointer<Int8>, BufferLength: Int16, TextLength: CPointer<Int16>): Int16
     func SQLSetConnectAttr(DBC_handle: CPointer<Unit>, Attribute: Int32, Value: Int64, StringLength: Int32): Int16
     func SQLEndTran(HandleType: Int16, Handle: CPointer<Unit>, CompletionType: Int16): Int16
     func SQLExecDirect(STMT_handle: CPointer<Unit>, StatementText: CString, TextLength: Int64): Int16

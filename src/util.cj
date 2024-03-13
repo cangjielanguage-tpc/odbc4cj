@@ -150,8 +150,8 @@ let SQL_C_INTERVAL_MINUTE_TO_SECOND: Int16 = 113
 let LEN_POINTER: UIntNative = 8
 let LEN_Int32: UIntNative = 4
 let LEN_Int16: UIntNative = 2
-let LEN_SQLSTATE: UIntNative = 6
-let LEN_MESSAGE: UIntNative = 512
+let LEN_SQLSTATE = 6
+let LEN_MESSAGE = 512
 let STRING_LEN: UInt64 = 8000
 
 let SQL_NO_NULLS: Int16 = 0
@@ -219,30 +219,30 @@ struct DataBuffer {
 }
 
 func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException {
-    var sqlstatePtr = unsafe { malloc(LEN_SQLSTATE) }
+    var sqlstatePtr = LibC.malloc<Int8>(count: LEN_SQLSTATE)
     if (sqlstatePtr.isNull()) {
         throw SqlException("Native malloc failed.")
     }
-    var nativeErrorPtr = unsafe { malloc(LEN_Int32) }
+    var nativeErrorPtr = LibC.malloc<Int32>()
     if (nativeErrorPtr.isNull()) {
-        unsafe { free(sqlstatePtr) }
+        unsafe { LibC.free(sqlstatePtr) }
         throw SqlException("Native malloc failed.")
     }
-    var messageText = unsafe { malloc(LEN_MESSAGE) }
-    if (sqlstatePtr.isNull()) {
+    var messageText = LibC.malloc<Int8>(count: LEN_MESSAGE)
+    if (messageText.isNull()) {
         unsafe {
-            free(sqlstatePtr)
-            free(nativeErrorPtr)
+            LibC.free(sqlstatePtr)
+            LibC.free(nativeErrorPtr)
         }
         throw SqlException("Native malloc failed.")
     }
 
-    var totalBytesPtr = unsafe { malloc(LEN_Int16) }
+    var totalBytesPtr = LibC.malloc<Int16>()
     if (sqlstatePtr.isNull()) {
         unsafe {
-            free(sqlstatePtr)
-            free(nativeErrorPtr)
-            free(messageText)
+            LibC.free(sqlstatePtr)
+            LibC.free(nativeErrorPtr)
+            LibC.free(messageText)
         }
         throw SqlException("Native malloc failed.")
     }
@@ -252,13 +252,6 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException 
     var sqlException: SqlException = SqlException()
 
     do {
-        unsafe {
-            CPointer<Int8>(messageText).write(0)
-            CPointer<Int8>(sqlstatePtr).write(0)
-            CPointer<Int32>(nativeErrorPtr).write(0)
-            CPointer<Int16>(totalBytesPtr).write(0)
-        }
-
         ret = unsafe { SQLGetDiagRec(HandleType, Handle, i, sqlstatePtr, nativeErrorPtr, messageText, msgLen, totalBytesPtr) }
         if (ret == SQL_NO_DATA) {
             break
@@ -267,17 +260,17 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException 
         var totalBytes = unsafe { CPointer<Int16>(totalBytesPtr).read() }
         if (SQLSucceeded(ret) && totalBytes > msgLen - 1) {
             msgLen = totalBytes + 1
-            var msgPtr = unsafe { realloc(messageText, Int64(msgLen)) }
+            var msgPtr = unsafe { realloc(CPointer<Unit>(messageText), Int64(msgLen)) }
             if (msgPtr.isNull()) {
                 unsafe {
-                    free(sqlstatePtr)
-                    free(nativeErrorPtr)
-                    free(messageText)
-                    free(totalBytesPtr)
+                    LibC.free(sqlstatePtr)
+                    LibC.free(nativeErrorPtr)
+                    LibC.free(messageText)
+                    LibC.free(totalBytesPtr)
                 }
                 throw SqlException("Native realloc failed.")
             }
-            messageText = msgPtr
+            messageText = CPointer<Int8>(msgPtr)
 
             ret = unsafe { SQLGetDiagRec(HandleType, Handle, i, sqlstatePtr, nativeErrorPtr, messageText, msgLen, totalBytesPtr) }
             if (!SQLSucceeded(ret)) {
@@ -286,7 +279,7 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException 
         }
 
         // Not always NULL terminated (MS Access)
-        unsafe { CPointer<Int8>(sqlstatePtr).write(5, 0) }
+        unsafe { sqlstatePtr.write(5, 0) }
 
         var text = CString(CPointer<UInt8>(messageText))
         var nativeError = unsafe { CPointer<Int32>(nativeErrorPtr).read() }
@@ -297,10 +290,10 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException 
     } while (ret != SQL_NO_DATA)
 
     unsafe {
-        free(sqlstatePtr)
-        free(nativeErrorPtr)
-        free(messageText)
-        free(totalBytesPtr)
+        LibC.free(sqlstatePtr)
+        LibC.free(nativeErrorPtr)
+        LibC.free(messageText)
+        LibC.free(totalBytesPtr)
     }
 
     return sqlException

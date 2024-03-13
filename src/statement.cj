@@ -152,10 +152,8 @@ public class OdbcStatement <: Statement {
                     free(CPointer<Unit>(paramInfo[i].strLenOrInd))
                 }
 
-                if (paramInfo[i].isArrary) {
+                if (paramInfo[i].isArrary || paramInfo[i].isString) {
                     releaseArrayRawData(paramInfo[i].cptrHand)
-                } else if (paramInfo[i].isString) {
-                    LibC.free(paramInfo[i].cstring)
                 } else {
                     free(paramInfo[i].parameterValuePtr)
                 }
@@ -503,21 +501,28 @@ public class OdbcStatement <: Statement {
 
         match(value) {
             case Some(v) =>
-                let realValue: InputStream = v
-                var arr = Array<Byte>(realValue.length, item: 0)
-                realValue.read(arr)
-                var parameterValuePtr = LibC.malloc<UInt8>(count: arr.size + 1)
-                for (i in 0..arr.size) {
-                    unsafe { parameterValuePtr.write(i, arr[i]) }
+                var arr: Array<Byte> = Array<Byte>(1, item: 0)
+                var list: ArrayList<Byte> = ArrayList<Byte>()
+                var length: Int64 = 0
+                while (true) {
+                    var date: Int64 = v.read(arr)
+                    if (date == 0) {
+                        break
+                    }
+                    list.append(arr[0])
+                    length++
                 }
-                 unsafe { parameterValuePtr.write(arr.size, 0) }
-                unsafe { strLenOrInd.write(Int64(SQL_NTS)) }
+                unsafe {
+                    var cp: CPointerHandle<Byte> = acquireArrayRawData<Byte>(list.toArray())
+                    info.parameterValuePtr = CPointer<Unit>(cp.pointer)
+                    info.cptrHand = cp
+                }
+                var columnSize = length
+                unsafe { strLenOrInd.write(length) }
 
-                info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
-                info.bufferLength = arr.size
+                info.bufferLength = columnSize
                 info.strLenOrInd = strLenOrInd
                 info.isString = true
-                info.cstring = CString(parameterValuePtr)
             case None =>
                 unsafe { strLenOrInd.write(SQL_NULL_DATA) }
                 info.strLenOrInd = strLenOrInd
@@ -538,20 +543,27 @@ public class OdbcStatement <: Statement {
 
         match(value) {
             case Some(v) =>
-                let realValue: InputStream = v
-                var arr = Array<Byte>(realValue.length, item: 0)
-                realValue.read(arr)
-                var cptrHandle = unsafe { acquireArrayRawData(arr) }
-                var parameterValuePtr = cptrHandle.pointer
-                var columnSize = max(arr.size, 1)
-                var bufferLength = arr.size
-                unsafe { strLenOrInd.write(bufferLength) }
-
-                info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+                var arr: Array<Byte> = Array<Byte>(1, item: 0)
+                var list: ArrayList<Byte> = ArrayList<Byte>()
+                var length: Int64 = 0
+                while (true) {
+                    var date: Int64 = v.read(arr)
+                    if (date == 0) {
+                        break
+                    }
+                    list.append(arr[0])
+                    length++
+                }
+                unsafe {
+                    var cp: CPointerHandle<Byte> = acquireArrayRawData<Byte>(list.toArray())
+                    info.parameterValuePtr = CPointer<Unit>(cp.pointer)
+                    info.cptrHand = cp
+                }
+                var columnSize = max(length, 1)
+                unsafe { strLenOrInd.write(length) }
                 info.bufferLength = columnSize
                 info.strLenOrInd = strLenOrInd
                 info.isArrary = true
-                info.cptrHand = cptrHandle
             case None =>
                 unsafe { strLenOrInd.write(SQL_NULL_DATA) }
                 info.strLenOrInd = strLenOrInd

@@ -45,7 +45,7 @@ public class blob_002 {
         @Assert("SqlBlob", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
             case v: SqlBlob =>
-                var a = Array<UInt8>(v.value.length, item: 0)
+                var a = Array<UInt8>(arr1.size, item: 0)
                 v.value.read(a)
                 @Assert(arr1.toString(), a.toString())
             case _ => @Assert("abc", "123")
@@ -55,7 +55,7 @@ public class blob_002 {
             case v: SqlNullableBlob =>
                 match(v.value) {
                     case Some(v) =>
-                        var a = Array<UInt8>(v.length, item: 0)
+                        var a = Array<UInt8>(1, item: 0)
                         v.read(a)
                         @Assert(None<Array<UInt8>>, a)
                     case None => @Assert(None<String>, None<String>)
