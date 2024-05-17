@@ -22,16 +22,16 @@ public class OdbcTest {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
-        var prepareStatement = conn.prepareStatement("drop table if exists test")
+        var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test(data TINYINT NOT NULL, datanull TINYINT)")
+        prepareStatement = conn.prepareStatement("create table test_llt(data TINYINT NOT NULL, datanull TINYINT)")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+        prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
         rowCount = prepareStatement.update([SqlByte(Int8.Max), SqlNullableByte(None)])
         @Assert(1, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("select * from test")
+        prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
         var arr: Array<SqlDbType> = [SqlByte(Int8.Max), SqlNullableByte(None)]
         queryResult.next(arr)
@@ -45,5 +45,6 @@ public class OdbcTest {
             case v: SqlNullableByte => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

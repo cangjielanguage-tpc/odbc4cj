@@ -43,6 +43,7 @@ public class OdbcTest {
             case v: SqlNullableInteger => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
 
         prepareStatement = conn.prepareStatement("update test set datanull = 10")
         rowCount = prepareStatement.update()

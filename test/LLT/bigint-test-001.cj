@@ -22,23 +22,22 @@ public class OdbcTest {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
-        var prepareStatement = conn.prepareStatement("drop table if exists test")
+        var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test(data bigint NOT NULL, datanull bigint)")
+        prepareStatement = conn.prepareStatement("create table test_llt(data bigint NOT NULL, datanull bigint)")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+        prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
         rowCount = prepareStatement.update([SqlBigInt(Int64.Max), SqlNullableBigInt(None)])
         @Assert(1, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("select * from test")
+        prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
         var arr: Array<SqlDbType> = [SqlBigInt(0), SqlNullableBigInt(0)]
         queryResult.next(arr)
         @Assert("SqlBigInt", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
-            case v: SqlBigInt => println(v.value)
-            // @Assert(Int64.Max, v.value)
+            case v: SqlBigInt => @Assert(Int64.Max, v.value)
             case _ => @Assert("abc", "123")
         }
         @Assert("SqlNullableBigInt", queryResult.columnInfos[1].typeName)
@@ -47,5 +46,6 @@ public class OdbcTest {
             @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

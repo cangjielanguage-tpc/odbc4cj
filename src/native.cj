@@ -21,7 +21,8 @@ foreign {
                           StringLength1: Int16, OutConnectionString: CString, BufferLength: Int16, StringLength2Ptr: CString,
                           DriverCompletion: Int16): Int16
     func SQLGetDiagRec(HandleType: Int16, Handle: CPointer<Unit>, RecNumber: Int16, Sqlstate: CPointer<Int8>,
-                       NativeError: CPointer<Int32>, MessageText: CPointer<Int8>, BufferLength: Int16, TextLength: CPointer<Int16>): Int16
+                       NativeError: CPointer<Int32>, MessageText: CPointer<Int8>, BufferLength: Int16,
+                       TextLength: CPointer<Int16>): Int16
     func SQLSetConnectAttr(DBC_handle: CPointer<Unit>, Attribute: Int32, Value: Int64, StringLength: Int32): Int16
     func SQLEndTran(HandleType: Int16, Handle: CPointer<Unit>, CompletionType: Int16): Int16
     func SQLExecDirect(STMT_handle: CPointer<Unit>, StatementText: CString, TextLength: Int64): Int16
@@ -44,6 +45,7 @@ foreign {
                     TargetValuePtr: CPointer<Unit>, BufferLength: Int64, StrLen_or_IndPtr: CPointer<Int64>): Int16
     func SQLGetData(STMT_handle: CPointer<Unit>, Col_or_Param_Num: Int64, TargetType: Int16,
                     TargetValuePtr: CPointer<Unit>, BufferLength: Int64, StrLen_or_IndPtr: CPointer<Int64>): Int16
+    func SQLCloseCursor(STMT_handle: CPointer<Unit>): Int16
     func SQLGetInfo(DBC_handle: CPointer<Unit>, InfoType: UInt16, InfoValuePtr: CPointer<Unit>, BufferLength: Int16,
                     StringLengthPtr: CPointer<Unit>): Int16
 }

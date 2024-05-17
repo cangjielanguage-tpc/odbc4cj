@@ -42,5 +42,6 @@ public class OdbcTest {
             case v: SqlNullableTimestampWithoutTz => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

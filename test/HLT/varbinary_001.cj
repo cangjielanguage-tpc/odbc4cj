@@ -35,5 +35,6 @@ public class OdbcTest {
             case v: SqlNullableVarBinary => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }
