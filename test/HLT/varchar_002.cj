@@ -36,5 +36,6 @@ public class OdbcTest {
             case v: SqlNullableVarchar => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

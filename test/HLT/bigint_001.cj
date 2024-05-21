@@ -39,5 +39,6 @@ public class bigint_001 {
             case v: SqlNullableBigInt => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

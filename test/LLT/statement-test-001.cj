@@ -22,7 +22,7 @@ public class OdbcTest {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
-        var ps = conn.prepareStatement("drop table if exists test")
+        var ps = conn.prepareStatement("drop table if exists test_llt")
 
         ps.getStmtHandle()
         ps.isClosed()

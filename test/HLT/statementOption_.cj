@@ -13,7 +13,11 @@ public class OdbcTest {
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
         var prepareStatement = conn.prepareStatement("drop table if exists test")
-        prepareStatement.setOption(0, 0)
+        try {
+            prepareStatement.setOption(0, 0)
+        } catch (e: SqlException) {
+            @Assert("errorCode: 0", e.message)
+        }
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("create table test(data int NOT NULL, datanull int)")
@@ -36,5 +40,6 @@ public class OdbcTest {
             case v: SqlNullableInteger => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

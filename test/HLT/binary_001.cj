@@ -39,5 +39,6 @@ public class binary_001 {
             case v: SqlNullableBinary => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

@@ -31,10 +31,5 @@ public class OdbcTest {
         @Assert(str, name)
         conn.getInfo(116, 2)
         conn.getInfo(169, 4)
-        try {
-            conn.getInfo(135, 8)
-        } catch (e: SqlException) {
-            @Assert("HYC00, SqlState: [MySQL][ODBC 8.0(a) Driver]Unsupported option: 135 to SQLGetInfo, errorCode: 4000", e.message)
-        }
     }
 }

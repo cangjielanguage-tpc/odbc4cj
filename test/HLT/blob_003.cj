@@ -50,5 +50,6 @@ public class blob_003 {
                 }
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

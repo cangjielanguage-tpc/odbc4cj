@@ -609,6 +609,11 @@ public class OdbcQueryResult <: QueryResult {
     }
 
     public func close(): Unit {
+        var ret = unsafe { SQLCloseCursor(this.STMT_handle) }
+        if (!SQLSucceeded(ret)) {
+            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            throw exception
+        }
     }
 
     public func isClosed(): Bool {

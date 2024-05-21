@@ -24,20 +24,20 @@ public class OdbcTest {
         var conn = database.connect()
         var tran = conn.createTransaction()
         tran.begin()
-        var prepareStatement = conn.prepareStatement("drop table if exists test")
+        var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         tran.commit()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test(data int NOT NULL, datanull int)")
+        prepareStatement = conn.prepareStatement("create table test_llt(data int NOT NULL, datanull int)")
         rowCount = prepareStatement.update()
         tran.commit()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("insert into test values(123,123)")
+        prepareStatement = conn.prepareStatement("insert into test_llt values(123,123)")
         tran.rollback()
 
-        prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+        prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
         rowCount = prepareStatement.update([SqlInteger(456), SqlNullableInteger(None)])
-        prepareStatement = conn.prepareStatement("select * from test")
+        prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
         var arr: Array<SqlDbType> = [SqlInteger(456), SqlNullableInteger(None)]
         queryResult.next(arr)
@@ -52,5 +52,6 @@ public class OdbcTest {
             case v: SqlNullableInteger => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

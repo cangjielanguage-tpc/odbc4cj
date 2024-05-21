@@ -22,17 +22,17 @@ public class OdbcTest {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
-        var prepareStatement = conn.prepareStatement("drop table if exists test")
+        var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test(data varchar(50) NOT NULL, datanull varchar(20))")
+        prepareStatement = conn.prepareStatement("create table test_llt(data varchar(50) NOT NULL, datanull varchar(20))")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+        prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
         rowCount = prepareStatement.update([SqlVarchar("萨菲罗斯经历过是"), SqlNullableVarchar(None)])
         println(rowCount.rowCount)
         @Assert(1, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("select * from test")
+        prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
         var arr: Array<SqlDbType> = [SqlVarchar("abc"), SqlNullableVarchar(None)]
         queryResult.next(arr)
@@ -46,5 +46,6 @@ public class OdbcTest {
             case v: SqlNullableVarchar => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }

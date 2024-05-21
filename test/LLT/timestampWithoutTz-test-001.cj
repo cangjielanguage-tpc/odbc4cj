@@ -22,13 +22,13 @@ public class OdbcTest {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
-        var prepareStatement = conn.prepareStatement("drop table if exists test")
+        var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test(data TIMESTAMP NOT NULL, datanull TIMESTAMP)")
+        prepareStatement = conn.prepareStatement("create table test_llt(data TIMESTAMP NOT NULL, datanull TIMESTAMP)")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("insert into test values(?,?)")
+        prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
         var date = DateTime.of(
             year: 2009,
             month: 11,
@@ -40,7 +40,7 @@ public class OdbcTest {
         )
         rowCount = prepareStatement.update([SqlTimestampWithoutTz(date), SqlNullableTimestampWithoutTz(None)])
         @Assert(1, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("select * from test")
+        prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
         var arr: Array<SqlDbType> = [SqlTimestampWithoutTz(DateTime.now()), SqlNullableTimestampWithoutTz(None)]
         queryResult.next(arr)
@@ -52,5 +52,6 @@ public class OdbcTest {
             case v: SqlNullableTimestampWithoutTz => @Assert(None, v.value)
             case _ => @Assert("abc", "123")
         }
+        queryResult.close()
     }
 }
