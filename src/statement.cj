@@ -857,7 +857,10 @@ public class OdbcStatement <: Statement {
     }
 
     public func close(): Unit {
-        unsafe { SQLFreeHandle(SQL_HANDLE_STMT, this.STMT_handlePtr) }
+        unsafe {
+            SQLCloseCursor(this.STMT_handlePtr)
+            SQLFreeHandle(SQL_HANDLE_STMT, this.STMT_handlePtr)
+        }
     }
 
     public func isClosed(): Bool {
