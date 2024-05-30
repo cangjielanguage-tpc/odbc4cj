@@ -67,7 +67,7 @@ public class OdbcQueryResult <: QueryResult {
                     case v: SqlNullableTime => v.value = getTime(i)
                     case v: SqlTimestampWithoutTz => v.value = getTimestampWithoutTz(i).getOrThrow()
                     case v: SqlNullableTimestampWithoutTz => v.value = getTimestampWithoutTz(i)
-                    case _ => ()
+                    case _ => throw SqlException("Unsupported data type.")
                 }
             }
         }
@@ -504,11 +504,7 @@ public class OdbcQueryResult <: QueryResult {
             var timestamp = DateTime.of(
                 year: Int64(colValue.year),
                 month: Int64(colValue.month),
-                dayOfMonth: Int64(colValue.day),
-                hour: 0,
-                minute: 0,
-                second: 0,
-                nanosecond: 0,
+                dayOfMonth: Int64(colValue.day)
             )
             res = Some(timestamp)
         }
@@ -551,8 +547,7 @@ public class OdbcQueryResult <: QueryResult {
                 dayOfMonth: 1,
                 hour: Int64(colValue.hour),
                 minute: Int64(colValue.minute),
-                second: Int64(colValue.second),
-                nanosecond: 0,
+                second: Int64(colValue.second)
             )
             res = Some(timestamp)
         }

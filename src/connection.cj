@@ -144,7 +144,8 @@ public class OdbcConnection <: Connection {
         }
         closed.store(true)
         unsafe {
-            DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            SQLCloseCursor(STMT_handlePtr.read())
+            SQLFreeHandle(SQL_HANDLE_STMT, STMT_handlePtr.read())
             SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
         }
     }
