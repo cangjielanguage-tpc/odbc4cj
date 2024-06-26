@@ -4,8 +4,6 @@
 
 package odbc
 
-from std import database.sql.*, io.*, time.*
-
 // 时间戳，无 TIME ZONE
 public class SqlTimestampWithoutTz <: SqlDbType {
     private var v: DateTime

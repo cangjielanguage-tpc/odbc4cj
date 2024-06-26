@@ -67,6 +67,8 @@ public class OdbcQueryResult <: QueryResult {
                     case v: SqlNullableTime => v.value = getTime(i)
                     case v: SqlTimestampWithoutTz => v.value = getTimestampWithoutTz(i).getOrThrow()
                     case v: SqlNullableTimestampWithoutTz => v.value = getTimestampWithoutTz(i)
+                    case v: SqlDecimal => v.value = getDecimal(i).getOrThrow()
+                    case v: SqlNullableDecimal => v.value = getDecimal(i)
                     case _ => throw SqlException("Unsupported data type.")
                 }
             }
@@ -601,6 +603,18 @@ public class OdbcQueryResult <: QueryResult {
             free(CPointer<Unit>(sizePtr))
         }
         return res
+    }
+
+    private func getDecimal(index: Int64): Option<Decimal> {
+        var buffer = readVarColumn(index, SQL_C_CHAR)
+        if (buffer.data.isNull()) {
+            return None
+        } else {
+            var colValue = CString(CPointer<UInt8>(buffer.data))
+            var ret = Some(Decimal(colValue.toString()))
+            unsafe { LibC.free(buffer.data) }
+            return ret
+        }
     }
 
     public func close(): Unit {
