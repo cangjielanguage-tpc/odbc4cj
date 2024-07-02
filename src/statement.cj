@@ -239,6 +239,8 @@ public class OdbcStatement <: Statement {
                 case v: SqlNullableTime => paramInfo[i] = setTime(v.value)
                 case v: SqlTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
                 case v: SqlNullableTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
+                case v: SqlDecimal => paramInfo[i] = setDecimal(v.value, SQL_VARCHAR)
+                case v: SqlNullableDecimal => paramInfo[i] = setDecimal(v.value, SQL_VARCHAR)
                 case _ => throw SqlException("Unsupported data type.")
             }
         }
@@ -353,6 +355,12 @@ public class OdbcStatement <: Statement {
                 typeName = "SqlTimestampWithoutTz"
             } else {
                 typeName = "SqlNullableTimestampWithoutTz"
+            }
+        } else if (dataType == SQL_DECIMAL) {
+            if (nullable == SQL_NO_NULLS) {
+                typeName = "SqlDecimal"
+            } else {
+                typeName = "SqlNullableDecimal"
             }
         } else {
             throw SqlException("Unknown type ${dataType}, please add type attribute.")
@@ -849,6 +857,36 @@ public class OdbcStatement <: Statement {
             if (strLenOrInd.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+
+        return info
+    }
+
+    private func setDecimal(value: Option<Decimal>, sqlType: Int16): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+
+        info.valueType = SQL_C_CHAR
+        info.parameterType = sqlType
+
+        if (value != None) {
+            let realValue: String = (value ?? Decimal(0)).toString()
+            var cstr = unsafe { LibC.mallocCString(realValue) }
+            var bufferLength = cstr.size()
+            var parameterValuePtr = CPointer<Unit>(cstr.getChars())
+            unsafe { strLenOrInd.write(Int64(SQL_NTS)) }
+
+            info.parameterValuePtr = parameterValuePtr
+            info.bufferLength = bufferLength
+            info.strLenOrInd = strLenOrInd
+            info.isString = true
+            info.cstring = cstr
+        } else {
             unsafe { strLenOrInd.write(SQL_NULL_DATA) }
             info.strLenOrInd = strLenOrInd
         }
