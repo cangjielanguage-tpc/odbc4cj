@@ -1,7 +1,3 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
 
 /* Global variables */
@@ -218,7 +214,7 @@ struct DataBuffer {
     var len: Int64 = 0
 }
 
-func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException {
+func diagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException {
     var sqlstatePtr = LibC.malloc<Int8>(count: LEN_SQLSTATE)
     if (sqlstatePtr.isNull()) {
         throw SqlException("Native malloc failed.")
@@ -301,4 +297,18 @@ func DiagnoseException(HandleType: Int16, Handle: CPointer<Unit>): SqlException 
 
 func SQLSucceeded(res: Int16): Bool {
     return (res == SQL_SUCCESS_WITH_INFO) || (res == SQL_SUCCESS)
+}
+
+struct ParamInfo {
+    var valueType: Int16 = 0
+    var parameterType: Int16 = 0
+    var columnSize: UInt64 = 0
+    var decimalDigits: Int16 = 0
+    var parameterValuePtr: CPointer<Unit> = CPointer<Unit>()
+    var bufferLength: Int64 = 0
+    var strLenOrInd: CPointer<Int64> = CPointer<Int64>()
+    var isString: Bool = false
+    var cstring: CString = CString(CPointer<UInt8>())
+    var isArrary: Bool = false
+    var cptrHand: CPointerHandle<UInt8> = CPointerHandle<UInt8>()
 }

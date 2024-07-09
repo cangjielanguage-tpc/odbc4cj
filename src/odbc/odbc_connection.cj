@@ -1,21 +1,28 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
-
-from std import collection.*, sync.*
 
 public class OdbcConnection <: Connection {
     private var DBC_handlePtr: CPointer<Unit>
     private let closed = AtomicBool(true)
     private var STMT_handlePtr: CPointer<CPointer<Unit>>
+    var objIdValue: UInt64
+    /*
+     * connection标识ID
+     */
+    public prop objId: UInt64 {
+        get() {
+            return objIdValue
+        }
+    }
 
-    public init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String) {
+    /*
+     * 初始化数据库连接
+     */
+    init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String) {
+        let rnd = Random()
+        rnd.seed = UInt64(DateTime.now().toUnixTimeStamp().toMilliseconds())
+        this.objIdValue = rnd.nextUInt64()
         var ret: Int16
-
         this.DBC_handlePtr = DBC_handlePtr
-
         /* Connect to database */
         unsafe {
             let csDateBase = LibC.mallocCString(dateBase)
@@ -26,22 +33,20 @@ public class OdbcConnection <: Connection {
             LibC.free(csUserName)
             LibC.free(csPassword)
         }
-
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
             throw exception
         } else {
             closed.store(false)
         }
-
         STMT_handlePtr = LibC.malloc<CPointer<Unit>>()
         if (STMT_handlePtr.isNull()) {
             throw SqlException("Native malloc Failed.")
         }
         ret = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
             throw exception
         }
@@ -50,7 +55,7 @@ public class OdbcConnection <: Connection {
     /**
      * 描述与数据源连接的当前状态
      */
-    public prop state: ConnectionState {
+    public override prop state: ConnectionState {
         get() {
             if (closed.load()) {
                 Closed
@@ -63,7 +68,7 @@ public class OdbcConnection <: Connection {
     /**
      * 返回连接到的数据源元数据 (不支持), 使用 getInfo 方法
      */
-    public func getMetaData(): Map<String, String> {
+    public override func getMetaData(): Map<String, String> {
         HashMap<String, String>()
     }
 
@@ -78,7 +83,6 @@ public class OdbcConnection <: Connection {
      */
     public func getInfo(infoType: UInt16, len: Int16): String {
         var infoValue: String = ""
-
         if (!(len == 2 || len == 4 || len >= 8)) {
             throw SqlException("len is not 2, 4 or >=8.")
         }
@@ -89,7 +93,7 @@ public class OdbcConnection <: Connection {
             }
             var ret = SQLGetInfo(DBC_handlePtr, infoType, CPointer<Unit>(infoValuePtr), len, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
-                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 LibC.free(infoValuePtr)
                 throw exception
             }
@@ -102,10 +106,8 @@ public class OdbcConnection <: Connection {
             } else if (len > 8) {
                 infoValue = CString(CPointer<UInt8>(infoValuePtr)).toString()
             }
-
             LibC.free(infoValuePtr)
         }
-
         return infoValue
     }
 
@@ -115,7 +117,7 @@ public class OdbcConnection <: Connection {
      * 返回值 Statement - 一个可以执行 sql 语句的实例对象
      * 异常 SqlException - 语法错误，sql 语句包含不认识的字符
      */
-    public func prepareStatement(sql: String): OdbcStatement {
+    public override func prepareStatement(sql: String): OdbcStatement {
         /* Allocate statement handle */
         unsafe {
             var statement = OdbcStatement(STMT_handlePtr.read())
@@ -123,7 +125,7 @@ public class OdbcConnection <: Connection {
             var ret = SQLPrepare(STMT_handlePtr.read(), csql, csql.size())
             LibC.free(csql)
             if (!SQLSucceeded(ret)) {
-                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 throw exception
             }
             return statement
@@ -134,12 +136,15 @@ public class OdbcConnection <: Connection {
      * 创建事务对象
      * 异常 SqlException - 已经处于事务状态，不支持并行事务。
      */
-    public func createTransaction(): OdbcTransaction {
-        OdbcTransaction(DBC_handlePtr)
+    public override func createTransaction(): OdbcTransaction {
+        OdbcTransaction(DBC_handlePtr, this)
     }
 
-    public func close(): Unit {
-        if (closed.load()) {
+    /*
+     * 关闭资源
+     */
+    public override func close(): Unit {
+        if (isClosed()) {
             return
         }
         closed.store(true)
@@ -150,7 +155,12 @@ public class OdbcConnection <: Connection {
         }
     }
 
-    public func isClosed(): Bool {
+    /*
+     * 判断资源是否关闭
+     *
+     * 返回值 Bool - 如果已经关闭返回true，否则返回false
+     */
+    public override func isClosed(): Bool {
         return closed.load()
     }
 }

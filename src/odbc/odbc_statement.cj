@@ -1,27 +1,10 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
-
-struct ParamInfo {
-    var valueType: Int16 = 0
-    var parameterType: Int16 = 0
-    var columnSize: UInt64 = 0
-    var decimalDigits: Int16 = 0
-    var parameterValuePtr: CPointer<Unit> = CPointer<Unit>()
-    var bufferLength: Int64 = 0
-    var strLenOrInd: CPointer<Int64> = CPointer<Int64>()
-    var isString: Bool = false
-    var cstring: CString = CString(CPointer<UInt8>())
-    var isArrary: Bool = false
-    var cptrHand: CPointerHandle<UInt8> = CPointerHandle<UInt8>()
-}
 
 public class OdbcStatement <: Statement {
     private var STMT_handlePtr: CPointer<Unit>
+    private let closed = AtomicBool(false)
 
-    public init(STMT_handlePtr: CPointer<Unit>) {
+    init(STMT_handlePtr: CPointer<Unit>) {
         this.STMT_handlePtr = STMT_handlePtr
     }
 
@@ -34,59 +17,52 @@ public class OdbcStatement <: Statement {
             if (ParameterCountPtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-
             unsafe {
                 ParameterCountPtr.write(0)
                 var ret = SQLNumParams(STMT_handlePtr, ParameterCountPtr)
                 if (!SQLSucceeded(ret)) {
-                    var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                    var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
                     unsafe { LibC.free<Int16>(ParameterCountPtr) }
                     throw exception
                 }
-
                 var len = CPointer<Int16>(ParameterCountPtr).read()
                 LibC.free<Int16>(ParameterCountPtr)
-
                 if (len != 0) {
-                var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), item: OdbcColumnInfo())
-                var parameterSizePtr = LibC.malloc<Int64>()
-                var dataTypePtr = LibC.malloc<Int16>()
-                var decimalDigitsPtr = LibC.malloc<Int16>()
-                var nullablePtr = LibC.malloc<Int16>()
-                for (i in 0..len) {
-                    var parameterNumber = i + 1
-                    unsafe {
-                        ret = SQLDescribeParam(STMT_handlePtr, parameterNumber, dataTypePtr, parameterSizePtr,
-                                               decimalDigitsPtr, nullablePtr)
-                        if (!SQLSucceeded(ret)) {
-                            var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
-                            LibC.free<Int64>(parameterSizePtr)
-                            LibC.free<Int16>(dataTypePtr)
-                            LibC.free<Int16>(decimalDigitsPtr)
-                            LibC.free<Int16>(nullablePtr)
-                            throw exception
+                    var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), item: OdbcColumnInfo())
+                    var parameterSizePtr = LibC.malloc<Int64>()
+                    var dataTypePtr = LibC.malloc<Int16>()
+                    var decimalDigitsPtr = LibC.malloc<Int16>()
+                    var nullablePtr = LibC.malloc<Int16>()
+                    for (i in 0..len) {
+                        var parameterNumber = i + 1
+                        unsafe {
+                            ret = SQLDescribeParam(STMT_handlePtr, parameterNumber, dataTypePtr, parameterSizePtr,
+                                                decimalDigitsPtr, nullablePtr)
+                            if (!SQLSucceeded(ret)) {
+                                var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                                LibC.free<Int64>(parameterSizePtr)
+                                LibC.free<Int16>(dataTypePtr)
+                                LibC.free<Int16>(decimalDigitsPtr)
+                                LibC.free<Int16>(nullablePtr)
+                                throw exception
+                            }
+                            var nullable = nullablePtr.read()
+                            var typeName = getSqlTypeName(dataTypePtr.read(), nullable)
+                            var odbcColumnInfo = OdbcColumnInfo("", typeName, parameterSizePtr.read(),
+                                                                decimalDigitsPtr.read(), 0, nullable)
+                            arrInfo[Int64(i)] = odbcColumnInfo
                         }
-
-                        var nullable = nullablePtr.read()
-                        var typeName = getSqlTypeName(dataTypePtr.read(), nullable)
-                        var odbcColumnInfo = OdbcColumnInfo("", typeName, parameterSizePtr.read(),
-                                                            decimalDigitsPtr.read(), 0, nullable)
-                        arrInfo[Int64(i)] = odbcColumnInfo
                     }
-                }
-
-                unsafe {
-                    LibC.free<Int64>(parameterSizePtr)
-                    LibC.free<Int16>(dataTypePtr)
-                    LibC.free<Int16>(decimalDigitsPtr)
-                    LibC.free<Int16>(nullablePtr)
-                }
-
-                return arrInfo
+                    unsafe {
+                        LibC.free<Int64>(parameterSizePtr)
+                        LibC.free<Int16>(dataTypePtr)
+                        LibC.free<Int16>(decimalDigitsPtr)
+                        LibC.free<Int16>(nullablePtr)
+                    }
+                    return arrInfo
                 } else {
                     return Array<ColumnInfo>()
                 }
-
             }
         }
     }
@@ -103,7 +79,7 @@ public class OdbcStatement <: Statement {
     public func setOption(key: Int32, value: Int64): Unit {
         var ret = unsafe { SQLSetConnectAttr(STMT_handlePtr, key, value, SQL_IS_INTEGER) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             throw exception
         }
     }
@@ -132,7 +108,7 @@ public class OdbcStatement <: Statement {
             }
 
             if (!SQLSucceeded(ret)) {
-                DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             }
         }
 
@@ -142,7 +118,7 @@ public class OdbcStatement <: Statement {
         } else if (ret == SQL_NO_DATA) {
             result = OdbcUpdateResult(0)
         } else {
-            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             result = OdbcUpdateResult(0)
         }
 
@@ -189,7 +165,7 @@ public class OdbcStatement <: Statement {
                 }
 
                 if (!SQLSucceeded(ret)) {
-                    DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                    diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
                 }
             }
         }
@@ -198,7 +174,7 @@ public class OdbcStatement <: Statement {
         if (SQLSucceeded(ret)) {
             return generateQueryResult()
         } else {
-            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             return OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
         }
     }
@@ -256,7 +232,7 @@ public class OdbcStatement <: Statement {
         if (SQLSucceeded(ret)) {
             updateResult = OdbcUpdateResult(unsafe { rowCountPtr.read() })
         }  else {
-            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             updateResult = OdbcUpdateResult(0)
         }
 
@@ -407,7 +383,7 @@ public class OdbcStatement <: Statement {
                             LibC.free<Int64>(columnSizePtr)
                             LibC.free<Int16>(decimalDigitsPtr)
                             LibC.free<Int16>(nullablePtr)
-                            var exception = DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                            var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
                             throw exception
                         }
                     }
@@ -423,11 +399,11 @@ public class OdbcStatement <: Statement {
                 }
                 queryResult = OdbcQueryResult(STMT_handlePtr, arrOdbcColumnInfo)
             } else {
-                DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
                 queryResult = OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
             }
         }  else {
-            DiagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             queryResult = OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
         }
 
@@ -895,6 +871,10 @@ public class OdbcStatement <: Statement {
     }
 
     public func close(): Unit {
+        if (isClosed()) {
+            return
+        }
+        closed.store(true)
         unsafe {
             SQLCloseCursor(this.STMT_handlePtr)
             SQLFreeHandle(SQL_HANDLE_STMT, this.STMT_handlePtr)
@@ -902,7 +882,7 @@ public class OdbcStatement <: Statement {
     }
 
     public func isClosed(): Bool {
-        return unsafe { STMT_handlePtr.isNull() }
+        return closed.load()
     }
 
     public func getStmtHandle(): CPointer<Unit> {
