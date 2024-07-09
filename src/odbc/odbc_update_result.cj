@@ -1,7 +1,3 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
 
 /* 执行 Insert、Update、Delete 语句产生的结果接口 */

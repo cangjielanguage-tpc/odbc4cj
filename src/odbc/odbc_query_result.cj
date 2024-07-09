@@ -1,13 +1,10 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
 
 /* 执行 Select 语句产生的结果接口 */
 public class OdbcQueryResult <: QueryResult {
     private var resultCount: Array<OdbcColumnInfo>
     private var STMT_handle: CPointer<Unit>
+    private let closed = AtomicBool(false)
 
     public init(STMT_handle: CPointer<Unit>, resultCount: Array<OdbcColumnInfo>) {
         this.STMT_handle = STMT_handle
@@ -101,7 +98,7 @@ public class OdbcQueryResult <: QueryResult {
             ret = unsafe { SQLGetData(this.STMT_handle, index + 1, ctype, pb + cbUsed, cbAllocated, cbData) }
 
             if (!SQLSucceeded(ret) && ret != SQL_NO_DATA) {
-                DiagnoseException(SQL_HANDLE_STMT, STMT_handle)
+                diagnoseException(SQL_HANDLE_STMT, STMT_handle)
                 unsafe {
                     LibC.free(pb)
                     LibC.free(cbData)
@@ -242,7 +239,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_STINYINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -282,7 +279,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_STINYINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -317,7 +314,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SSHORT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -352,7 +349,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SLONG, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -387,7 +384,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_SBIGINT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -422,7 +419,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_FLOAT, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -457,7 +454,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_DOUBLE, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -492,7 +489,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_DATE, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -532,7 +529,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIME, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -575,7 +572,7 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = unsafe { SQLGetData(this.STMT_handle, index + 1, SQL_C_TYPE_TIMESTAMP, colValueUnitPtr, colValueSize, sizePtr) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             unsafe {
                 free(colValueUnitPtr)
                 free(CPointer<Unit>(sizePtr))
@@ -618,14 +615,18 @@ public class OdbcQueryResult <: QueryResult {
     }
 
     public func close(): Unit {
+        if (isClosed()) {
+            return
+        }
+        closed.store(true)
         var ret = unsafe { SQLCloseCursor(this.STMT_handle) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
+            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
             throw exception
         }
     }
 
     public func isClosed(): Bool {
-        return false
+        return closed.load()
     }
 }

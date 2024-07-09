@@ -1,7 +1,3 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
 
 public class OdbcTransaction <: Transaction {
@@ -9,6 +5,7 @@ public class OdbcTransaction <: Transaction {
     public var level: TransactionIsoLevel = Unspecified
     public var myAccessMode: TransactionAccessMode = ReadWrite
     public var myDeferrableMode: TransactionDeferrableMode = NotDeferrable
+    var odbcConnection: OdbcConnection
 
     /*
      * 数据库事务隔离级别。
@@ -19,6 +16,9 @@ public class OdbcTransaction <: Transaction {
         }
 
         set(value) {
+            if (odbcConnection.isClosed()) {
+                throw SqlException("The database connection has been closed")
+            }
             var valuePtr: Int64
             match (value) {
                 case ReadCommitted => valuePtr = Int64(SQL_TXN_READ_COMMITTED)
@@ -29,7 +29,7 @@ public class OdbcTransaction <: Transaction {
             }
             var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER) }
             if (!SQLSucceeded(ret)) {
-                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 throw exception
             }
 
@@ -63,8 +63,9 @@ public class OdbcTransaction <: Transaction {
         }
     }
 
-    public init(DBC_handlePtr: CPointer<Unit>) {
+    public init(DBC_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
         this.DBC_handlePtr = DBC_handlePtr
+        this.odbcConnection = odbcConnection
         var infoValue: UInt32
         unsafe {
             var infoValuePtr = malloc(LEN_MALLOC_4)
@@ -73,7 +74,7 @@ public class OdbcTransaction <: Transaction {
             }
             var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
-                var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 free(infoValuePtr)
                 throw exception
             }
@@ -98,10 +99,13 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public func begin(): Unit {
+        if (odbcConnection.isClosed()) {
+            throw SqlException("The database connection has been closed")
+        }
         /* Set autocommit attribute */
         var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             throw exception
         }
     }
@@ -112,9 +116,12 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public func commit(): Unit {
+        if (odbcConnection.isClosed()) {
+            throw SqlException("The database connection has been closed")
+        }
         var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             throw exception
         }
     }
@@ -125,9 +132,12 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public func rollback(): Unit {
+        if (odbcConnection.isClosed()) {
+            throw SqlException("The database connection has been closed")
+        }
         var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_ROLLBACK) }
         if (!SQLSucceeded(ret)) {
-            var exception = DiagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             throw exception
         }
     }

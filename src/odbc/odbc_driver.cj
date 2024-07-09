@@ -1,14 +1,18 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2023-2023. All rights reserved.
- */
-
 package odbc
 
-from std import database.sql.*, io.*, time.*, regex.*, core.*, math.*
+// 自动注册驱动
+let _ = {
+     => DriverManager.register("odbc", OdbcDriver())
+}()
 
 public class OdbcDriver <: Driver {
     private var ENV_handlePtr: CPointer<CPointer<Unit>>
 
+    /*
+     * 初始化驱动
+     *
+     * 异常 SqlException - 内存不足导致初始化失败
+     */
     public init() {
         /* Allocate Environment Handle */
         this.ENV_handlePtr = LibC.malloc<CPointer<Unit>>()
@@ -20,7 +24,6 @@ public class OdbcDriver <: Driver {
         if (!SQLSucceeded(ret)) {
             throw SqlException("Can't initialize module odbc. SQLAllocEnv failed.")
         }
-
         /* Set version attribute */
         ret = unsafe { SQLSetEnvAttr(this.ENV_handlePtr.read(), SQL_ATTR_ODBC_VERSION, SQL_OV_ODBC3, SQL_IS_INTEGER) }
         if (!SQLSucceeded(ret)) {
@@ -31,7 +34,7 @@ public class OdbcDriver <: Driver {
     /**
      * 驱动名称 (不支持)
      */
-    public prop name: String {
+    public override prop name: String {
         get() {
             ""
         }
@@ -40,7 +43,7 @@ public class OdbcDriver <: Driver {
     /**
      * 驱动版本 (不支持)
      */
-    public prop version: String {
+    public override prop version: String {
         get() {
             ""
         }
@@ -51,9 +54,9 @@ public class OdbcDriver <: Driver {
      * 如果否，则不建议使用连接池。
      * 比如 sqlite 驱动连接池化的收益不明显不建议使用连接池
      */
-    public prop preferredPooling: Bool {
+    public override prop preferredPooling: Bool {
         get() {
-            true
+            false
         }
     }
 
@@ -65,22 +68,19 @@ public class OdbcDriver <: Driver {
      *            2个选项，用来设置 sql 语句提交方式
      * 返回值 Datasource - 数据源实例
      */
-    public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {
+    public override func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {
         var dateBase = ""
         var userName = ""
         var pd = ""
-
         var arr = connectionString.split(";")
         if (arr.size != 3) {
             throw SqlException("Url is error")
         }
-
         for (i in 0..3) {
             var list = arr[i].split("=")
             if (list.size != 2) {
                 throw SqlException("Url is error")
             }
-
             if (list[0] == "DATABASE") {
                 dateBase = list[1]
             } else if (list[0] == "UID") {
@@ -91,7 +91,6 @@ public class OdbcDriver <: Driver {
                 throw SqlException("Url is error")
             }
         }
-
         return unsafe { OdbcDatasource(ENV_handlePtr.read(), dateBase, userName, pd, opts) }
     }
 }
