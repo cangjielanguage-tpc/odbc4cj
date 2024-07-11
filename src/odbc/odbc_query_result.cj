@@ -1,3 +1,7 @@
+/*
+ * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+ 
 package odbc
 
 /* 执行 Select 语句产生的结果接口 */
@@ -6,7 +10,7 @@ public class OdbcQueryResult <: QueryResult {
     private var STMT_handle: CPointer<Unit>
     private let closed = AtomicBool(false)
 
-    public init(STMT_handle: CPointer<Unit>, resultCount: Array<OdbcColumnInfo>) {
+    init(STMT_handle: CPointer<Unit>, resultCount: Array<OdbcColumnInfo>) {
         this.STMT_handle = STMT_handle
         this.resultCount = resultCount
     }
@@ -14,7 +18,7 @@ public class OdbcQueryResult <: QueryResult {
     /**
      * 返回结果集的列信息，比如列名，列类型，列长度，是否允许数据库 Null 值等
      */
-    public prop columnInfos: Array<ColumnInfo> {
+    public override prop columnInfos: Array<ColumnInfo> {
         get() {
             Array<ColumnInfo>(resultCount.size, {i => (resultCount[i] as OdbcColumnInfo).getOrThrow()})
         }
@@ -25,7 +29,7 @@ public class OdbcQueryResult <: QueryResult {
      * 当返回 true 时，驱动会在 values 中填入行数据；当返回 false 时结束，且不会修改 values 的内容。
      * 返回值 Bool - 存在下一行则返回 true，否则返回 false
      */
-    public func next(values: Array<SqlDbType>): Bool {
+    public override func next(values: Array<SqlDbType>): Bool {
         var res = unsafe { SQLFetch(STMT_handle) }
         if (res == SQL_NO_DATA) {
             return false
@@ -92,6 +96,8 @@ public class OdbcQueryResult <: QueryResult {
         }
         var ret = SQL_SUCCESS_WITH_INFO
 
+        var isNull = false
+
         do {
             var cbAvailable = cbAllocated - cbUsed
             unsafe { cbData.write(0) }
@@ -110,6 +116,7 @@ public class OdbcQueryResult <: QueryResult {
             if (ret == SQL_SUCCESS && data < 0) {
                 ret = Int16(SQL_NULL_DATA)
                 unsafe { cbData.write(0) }
+                isNull = true
             }
 
             if (ret == SQL_SUCCESS_WITH_INFO) {
@@ -154,6 +161,13 @@ public class OdbcQueryResult <: QueryResult {
             unsafe { LibC.free(cbData) }
             return buffer
         } else {
+            if(!isNull){
+                var buffer = DataBuffer()
+                buffer.data = pb
+                buffer.len = cbUsed
+                unsafe { LibC.free(cbData) }
+                return buffer
+            }
             unsafe {
                 LibC.free(pb)
                 LibC.free(cbData)
@@ -614,19 +628,14 @@ public class OdbcQueryResult <: QueryResult {
         }
     }
 
-    public func close(): Unit {
+    public override func close(): Unit {
         if (isClosed()) {
             return
         }
         closed.store(true)
-        var ret = unsafe { SQLCloseCursor(this.STMT_handle) }
-        if (!SQLSucceeded(ret)) {
-            var exception = diagnoseException(SQL_HANDLE_STMT, this.STMT_handle)
-            throw exception
-        }
     }
 
-    public func isClosed(): Bool {
+    public override func isClosed(): Bool {
         return closed.load()
     }
 }

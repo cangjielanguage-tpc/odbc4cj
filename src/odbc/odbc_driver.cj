@@ -1,3 +1,7 @@
+/*
+ * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+ 
 package odbc
 
 // 自动注册驱动
@@ -6,29 +10,12 @@ let _ = {
 }()
 
 public class OdbcDriver <: Driver {
-    private var ENV_handlePtr: CPointer<CPointer<Unit>>
-
     /*
      * 初始化驱动
      *
      * 异常 SqlException - 内存不足导致初始化失败
      */
     public init() {
-        /* Allocate Environment Handle */
-        this.ENV_handlePtr = LibC.malloc<CPointer<Unit>>()
-        if (this.ENV_handlePtr.isNull()) {
-            throw SqlException("Native malloc Failed.")
-        }
-        let nullHandle = CPointer<Unit>()
-        var ret = unsafe { SQLAllocHandle(SQL_HANDLE_ENV, nullHandle, this.ENV_handlePtr) }
-        if (!SQLSucceeded(ret)) {
-            throw SqlException("Can't initialize module odbc. SQLAllocEnv failed.")
-        }
-        /* Set version attribute */
-        ret = unsafe { SQLSetEnvAttr(this.ENV_handlePtr.read(), SQL_ATTR_ODBC_VERSION, SQL_OV_ODBC3, SQL_IS_INTEGER) }
-        if (!SQLSucceeded(ret)) {
-            throw SqlException("Unable to set SQL_ATTR_ODBC_VERSION attribute.")
-        }
     }
 
     /**
@@ -91,6 +78,6 @@ public class OdbcDriver <: Driver {
                 throw SqlException("Url is error")
             }
         }
-        return unsafe { OdbcDatasource(ENV_handlePtr.read(), dateBase, userName, pd, opts) }
+        return unsafe { OdbcDatasource(dateBase, userName, pd, opts) }
     }
 }
