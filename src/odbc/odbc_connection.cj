@@ -1,9 +1,12 @@
+/*
+ * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+ 
 package odbc
 
 public class OdbcConnection <: Connection {
     private var DBC_handlePtr: CPointer<Unit>
     private let closed = AtomicBool(true)
-    private var STMT_handlePtr: CPointer<CPointer<Unit>>
     var objIdValue: UInt64
     /*
      * connection标识ID
@@ -39,16 +42,6 @@ public class OdbcConnection <: Connection {
             throw exception
         } else {
             closed.store(false)
-        }
-        STMT_handlePtr = LibC.malloc<CPointer<Unit>>()
-        if (STMT_handlePtr.isNull()) {
-            throw SqlException("Native malloc Failed.")
-        }
-        ret = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
-        if (!SQLSucceeded(ret)) {
-            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-            unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
-            throw exception
         }
     }
 
@@ -120,14 +113,25 @@ public class OdbcConnection <: Connection {
     public override func prepareStatement(sql: String): OdbcStatement {
         /* Allocate statement handle */
         unsafe {
-            var statement = OdbcStatement(STMT_handlePtr.read())
+            var STMT_handlePtr: CPointer<CPointer<Unit>> = LibC.malloc<CPointer<Unit>>()
+            if (STMT_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            var ret: Int16 = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
+            if (!SQLSucceeded(ret)) {
+                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
+                throw exception
+            }
+            var STMT_handlePtr1: CPointer<Unit> = STMT_handlePtr.read()
             let csql = LibC.mallocCString(sql)
-            var ret = SQLPrepare(STMT_handlePtr.read(), csql, csql.size())
+            ret = SQLPrepare(STMT_handlePtr1, csql, csql.size())
             LibC.free(csql)
             if (!SQLSucceeded(ret)) {
                 var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 throw exception
             }
+            var statement = OdbcStatement(STMT_handlePtr1)
             return statement
         }
     }
@@ -149,8 +153,6 @@ public class OdbcConnection <: Connection {
         }
         closed.store(true)
         unsafe {
-            SQLCloseCursor(STMT_handlePtr.read())
-            SQLFreeHandle(SQL_HANDLE_STMT, STMT_handlePtr.read())
             SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
         }
     }

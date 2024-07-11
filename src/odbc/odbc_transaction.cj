@@ -1,3 +1,7 @@
+/*
+ * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+ 
 package odbc
 
 public class OdbcTransaction <: Transaction {
@@ -10,7 +14,7 @@ public class OdbcTransaction <: Transaction {
     /*
      * 数据库事务隔离级别。
      */
-    public mut prop isoLevel: TransactionIsoLevel {
+    public mut override prop isoLevel: TransactionIsoLevel {
         get() {
             level
         }
@@ -25,6 +29,7 @@ public class OdbcTransaction <: Transaction {
                 case ReadUncommitted => valuePtr = Int64(SQL_TXN_READ_UNCOMMITTED)
                 case RepeatableRead => valuePtr = Int64(SQL_TXN_REPEATABLE_READ)
                 case Serializable => valuePtr = Int64(SQL_TXN_SERIALIZABLE)
+                case Unspecified => valuePtr = Int64(SQL_TXN_REPEATABLE_READ)
                 case _ => throw SqlException(" ${value} mode not supported.")
             }
             var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER) }
@@ -40,7 +45,7 @@ public class OdbcTransaction <: Transaction {
     /*
      * 数据库事务访问模式。(不支持)
      */
-    public mut prop accessMode: TransactionAccessMode {
+    public mut override prop accessMode: TransactionAccessMode {
         get() {
             myAccessMode
         }
@@ -53,7 +58,7 @@ public class OdbcTransaction <: Transaction {
     /*
      * 数据库事务延迟模式。(不支持)
      */
-    public mut prop deferrableMode: TransactionDeferrableMode {
+    public mut override prop deferrableMode: TransactionDeferrableMode {
         get() {
             myDeferrableMode
         }
@@ -63,7 +68,10 @@ public class OdbcTransaction <: Transaction {
         }
     }
 
-    public init(DBC_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
+    init(DBC_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
+        if (odbcConnection.isClosed()) {
+            throw SqlException("The database connection has been closed")
+        }
         this.DBC_handlePtr = DBC_handlePtr
         this.odbcConnection = odbcConnection
         var infoValue: UInt32
@@ -98,7 +106,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func begin(): Unit {
+    public override func begin(): Unit {
         if (odbcConnection.isClosed()) {
             throw SqlException("The database connection has been closed")
         }
@@ -115,7 +123,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func commit(): Unit {
+    public override func commit(): Unit {
         if (odbcConnection.isClosed()) {
             throw SqlException("The database connection has been closed")
         }
@@ -131,7 +139,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 回滚事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func rollback(): Unit {
+    public override func rollback(): Unit {
         if (odbcConnection.isClosed()) {
             throw SqlException("The database connection has been closed")
         }
@@ -147,7 +155,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func save(savePointName: String): Unit {
+    public override func save(savePointName: String): Unit {
     }
 
     /*
@@ -155,7 +163,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func rollback(savePointName: String): Unit {
+    public override func rollback(savePointName: String): Unit {
     }
 
     /*
@@ -163,6 +171,6 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 提交事务时服务器端发生错误。
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
-    public func release(savePointName: String): Unit {
+    public override func release(savePointName: String): Unit {
     }
 }

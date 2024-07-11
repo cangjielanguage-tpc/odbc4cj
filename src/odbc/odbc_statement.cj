@@ -1,3 +1,7 @@
+/*
+ * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+ 
 package odbc
 
 public class OdbcStatement <: Statement {
@@ -11,7 +15,7 @@ public class OdbcStatement <: Statement {
     /*
      * 预执行sql语句中，占位参数的列信息，比如列名，列类型，列长度，是否允许数据库Null值等
      */
-    public prop parameterColumnInfos: Array<ColumnInfo> {
+    public override prop parameterColumnInfos: Array<ColumnInfo> {
         get() {
             var ParameterCountPtr = LibC.malloc<Int16>()
             if (ParameterCountPtr.isNull()) {
@@ -70,7 +74,7 @@ public class OdbcStatement <: Statement {
     /**
      * 设置预执行 sql 语句选项
      */
-    public func setOption(key: String, value: String): Unit {
+    public override func setOption(key: String, value: String): Unit {
     }
 
     /**
@@ -89,7 +93,7 @@ public class OdbcStatement <: Statement {
      * 返回值 UpdateResult - 更新结果。
      * 异常 SqlException - 执行过程中发生了异常，比如网络中断，服务器超时，参数个数不正确
      */
-    public func update(params: Array<SqlDbType>): OdbcUpdateResult {
+    public override func update(params: Array<SqlDbType>): OdbcUpdateResult {
         var ret: Int16
         var result: OdbcUpdateResult
         var paramInfo = getParamInfo(params)
@@ -144,7 +148,7 @@ public class OdbcStatement <: Statement {
      * 返回值 QueryResult - 查询结果。
      * 异常 SqlException - 执行过程中发生了异常，比如网络中断，服务器超时，参数个数不正确
      */
-    public func query(params: Array<SqlDbType>): OdbcQueryResult {
+    public override func query(params: Array<SqlDbType>): OdbcQueryResult {
         var ret: Int16
 
         if (parameterColumnInfos.size > params.size) {
@@ -870,7 +874,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    public func close(): Unit {
+    public override func close(): Unit {
         if (isClosed()) {
             return
         }
@@ -881,7 +885,7 @@ public class OdbcStatement <: Statement {
         }
     }
 
-    public func isClosed(): Bool {
+    public override func isClosed(): Bool {
         return closed.load()
     }
 

@@ -1,3 +1,7 @@
+/*
+ * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
+ */
+ 
 package odbc
 
 public class OdbcColumnInfo <: ColumnInfo {
@@ -31,21 +35,21 @@ public class OdbcColumnInfo <: ColumnInfo {
     }
 
     // 列名或者别名
-    public prop name: String {
+    public override prop name: String {
         get() {
             lName
         }
     }
 
     // 列类型名称，如果在 SqlDataType 中定义，返回 SqlDataType.toString(), 如果未在 SqlDataType 中定义，由数据库驱动定义
-    public prop typeName: String {
+    public override prop typeName: String {
         get() {
             lTypeName
         }
     }
 
     // 列值的最大显示长度，如果无限制，则应该返回 Int64.Max（仍然受数据库的限制）
-    public prop displaySize: Int64 {
+    public override prop displaySize: Int64 {
         get() {
             lDisplaySize
         }
@@ -60,21 +64,21 @@ public class OdbcColumnInfo <: ColumnInfo {
      * 对于 RowID 数据类型，这是以字节为单位的长度 。
      * 对于列大小不适用的数据类型，返回 0。
      */
-    public prop length: Int64 {
+    public override prop length: Int64 {
         get() {
             lLength
         }
     }
 
     // 列值的小数长度，如果无小数部分，返回 0
-    public prop scale: Int64 {
+    public override prop scale: Int64 {
         get() {
             lScale
         }
     }
 
     // 列值是否允许数据库 Null 值
-    public prop nullable: Bool {
+    public override prop nullable: Bool {
         get() {
             lNullable
         }
