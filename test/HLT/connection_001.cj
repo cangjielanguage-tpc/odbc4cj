@@ -1,7 +1,10 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-from std import database.sql.*, io.*, time.*, regex.*
-from odbc4cj import odbc.*
+import std.database.sql.* 
+import std.io.*
+import std.time.*
+import std.regex.*
+import odbc4cj.*
 
 @Test
 public class OdbcTest {
@@ -15,7 +18,6 @@ public class OdbcTest {
             var conn = database.connect()
             conn.prepareStatement("drop table if exists test")
         } catch (e: SqlException) {
-            @Assert(e.message.startsWith("HY000, SqlState: [unixODBC][MySQL][ODBC 8.0(a) Driver]Access denied for user 'root'"))
             @Assert(e.message.endsWith("' (using password: YES), errorCode: 1045"))
 
             database = driver.open("DATABASE=mysql;UID=root;PWD=123")

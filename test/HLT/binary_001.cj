@@ -1,7 +1,10 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-from std import database.sql.*, io.*, time.*, regex.*
-from odbc4cj import odbc.*
+import std.database.sql.* 
+import std.io.*
+import std.time.*
+import std.regex.*
+import odbc4cj.*
 
 @Test
 public class binary_001 {

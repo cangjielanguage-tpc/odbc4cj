@@ -1,8 +1,12 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-from std import database.sql.*, io.*, time.*, regex.*, math.*
-from std import collection.*
-from odbc4cj import odbc.*
+import std.database.sql.* 
+import std.io.*
+import std.time.*
+import std.regex.*
+import std.math.*
+import std.collection.*
+import odbc4cj.*
 
 //threadCount: 5,10,20,50,100,200,500
 //loopCount:100,200,500,800,1000
