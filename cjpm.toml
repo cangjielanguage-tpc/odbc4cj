@@ -1,12 +1,10 @@
 [dependencies]
 
-[ffi]
-  [ffi.c]
-    [ffi.c.odbc]
-      path = "./lib/"
+[ffi.c]
+  odbc = {path = "./lib/"}
 
 [package]
-  cjc-version = "0.51.4"
+  cjc-version = "0.53.4"
   compile-option = "-O2 -Woff unused"
   description = "nothing here"
   link-option = ""

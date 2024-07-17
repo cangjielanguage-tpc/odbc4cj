@@ -4,7 +4,7 @@
 <p align="center">
 <img alt="" src="https://img.shields.io/badge/release-v0.0.1-brightgreen" style="display: inline-block;" />
 <img alt="" src="https://img.shields.io/badge/build-pass-brightgreen" style="display: inline-block;" />
-<img alt="" src="https://img.shields.io/badge/cjc-v0.51.4-brightgreen" style="display: inline-block;" />
+<img alt="" src="https://img.shields.io/badge/cjc-v0.53.4-brightgreen" style="display: inline-block;" />
 <img alt="" src="https://img.shields.io/badge/cjcov-80.8%25-red" style="display: inline-block;" />
 <img alt="" src="https://img.shields.io/badge/project-open-brightgreen" style="display: inline-block;" />
 </p>
@@ -63,17 +63,6 @@
 ├─ README.md
 ├─ README.OpenSource
 ├─ src
-│  ├─ columnInfo.cj
-│  ├─ connection.cj
-│  ├─ datasource.cj
-│  ├─ driver.cj
-│  ├─ native.cj
-│  ├─ queryResult.cj
-│  ├─ sqlTypeExtend.cj
-│  ├─ statement.cj
-│  ├─ transaction.cj
-│  ├─ updateResult.cj
-│  └─ util.cj
 └─ test
    ├─ HLT
    └─ LLT
@@ -91,18 +80,93 @@
 
 ### 编译构建
 
-描述具体的编译过程：
+1、安装
+
+linux安装 unixODBC
+
+https://learn.microsoft.com/zh-cn/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server?view=sql-server-ver16&tabs=alpine18-install%2Calpine17-install%2Cdebian8-install%2Credhat7-13-install%2Crhel7-offline
+
+window安装
+
+https://learn.microsoft.com/zh-cn/sql/connect/odbc/windows/microsoft-odbc-driver-for-sql-server-on-windows?view=sql-server-ver16
+
+2、克隆项目
+
+```shell
+git clone https://gitcode.com/Cangjie-TPC/odbc4cj.git
+```
+
+3、切换目录
+
+```shell
+cd odbc4cj
+```
+
+4、在当前目录新建 lib 文件夹
+
+5、迁移lib
+
+linux 环境下 将 libodbc.so复制到lib中。libodbc.so通常在 /usr/lib/x86_64-linux-gnu/ 目录下
+
+window 环境下 将 libmyodbc8a.dll、libcrypto-1_1-x64.dll、libsasl.dll、libssl-1_1-x64.dll复制到lib中。将 cjpm.toml文件中的 odbc = {path = "./lib/"} 改成 myodbc8a = {path = "./lib/"}。libmyodbc8a.dll 下载mysql版本的odbc插件目录中，libcrypto-1_1-x64.dll、libsasl.dll、libssl-1_1-x64.dll在window系统目录中
+
+6、编译项目
 
 ```shell
 cjpm build
 ```
 
+7、编译示例文件
+
+示例文件在 /test/DOC/test_example1.cj  
+${path}修改成用户自己项目本地路径
+
+linux 编译指令
+
+```shell
+cp ${path}/libs/libodbc.so ${path}/odbc4cj/target/release/odbc4cj   ---> 复制so到指定路径
+
+cd target/release/odbc4cj   ---> 切换目录
+
+cjc  --import-path ${path}/odbc4cj/target/release -L ${path}/odbc4cj/target/release/odbc4cj -l odbc -l odbc4cj ${path}/odbc4cj/test/DOC/test_example1.cj -O0 -Woff alll  ---> 编译 test/LLT 用例
+
+```
+
+windows 编译指令
+
+```cmd
+cp ${path}/libs/libmyodbc8a.dll ${path}/odbc4cj/target/release/odbc4cj   ---> 复制dll到指定路径
+cp ${path}/libs/libcrypto-1_1-x64.dll ${path}/odbc4cj/target/release/odbc4cj   ---> 复制dll到指定路径
+cp ${path}/libs/libsasl.dll ${path}/odbc4cj/target/release/odbc4cj   ---> 复制dll到指定路径
+cp ${path}/libs/libssl-1_1-x64.dll ${path}/odbc4cj/target/release/odbc4cj   ---> 复制dll到指定路径
+
+cd target/release/odbc4cj   ---> 切换目录
+
+cjc  --import-path ${path}/odbc4cj/target/release -L ${path}/odbc4cj/target/release/odbc4cj -l crypto-1_1-x64 -l myodbc8a -l sasl -l ssl-1_1-x64 -l odbc4cj ${path}/odbc4cj/test/DOC/test_example1.cj -O0 -Woff alll  ---> 编译 test/LLT 用例
+```
+
+8、运行执行文件
+
+linux 运行
+
+```shell
+./main
+```
+
+windows 运行
+
+```cmd
+./main.exe
+```
+
 ### 功能示例
 
 ```cangjie
-package odbc
-from std import database.sql.*, io.*, time.*, regex.*
-from odbc4cj import odbc.*
+import std.database.sql.* 
+import std.io.*
+import std.time.*
+import std.regex.*
+import odbc4cj.*
 
 main() {
     var driver = OdbcDriver()
@@ -129,12 +193,6 @@ main() {
 }
 ```
 
-编译执行：
-
-```
-cjc --import-path build  -Lbuild/odbc4cj -l myodbc8a -l odbc4cj_odbc  testExample1.cj -o main
-```
-
 执行结果如下：
 
 ```
@@ -144,7 +202,7 @@ None
 
 ## 开源协议
 
-MulanPSL-2.0 License
+[LICENSE](/LICENSE)
 
 ## 参与贡献
 
