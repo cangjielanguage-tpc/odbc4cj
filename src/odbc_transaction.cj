@@ -10,12 +10,38 @@ public class OdbcTransaction <: Transaction {
     public var myAccessMode: TransactionAccessMode = ReadWrite
     public var myDeferrableMode: TransactionDeferrableMode = NotDeferrable
     var odbcConnection: OdbcConnection
-
     /*
      * 数据库事务隔离级别。
      */
     public mut override prop isoLevel: TransactionIsoLevel {
         get() {
+            var infoValue: UInt32
+            unsafe {
+                var infoValuePtr = malloc(LEN_MALLOC_4)
+                if (infoValuePtr.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
+                var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
+                if (!SQLSucceeded(ret)) {
+                    var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                    free(infoValuePtr)
+                    throw exception
+                }
+                infoValue = CPointer<UInt32>(infoValuePtr).read()
+                free(infoValuePtr)
+            }
+
+            if (infoValue == SQL_TXN_READ_UNCOMMITTED) {
+                level = ReadUncommitted
+            } else if (infoValue == SQL_TXN_READ_COMMITTED) {
+                level = ReadCommitted
+            } else if (infoValue == SQL_TXN_REPEATABLE_READ) {
+                level = RepeatableRead
+            } else if (infoValue == SQL_TXN_SERIALIZABLE) {
+                level = Serializable
+            } else {
+                level = ReadCommitted
+            }
             level
         }
 
@@ -29,8 +55,13 @@ public class OdbcTransaction <: Transaction {
                 case ReadUncommitted => valuePtr = Int64(SQL_TXN_READ_UNCOMMITTED)
                 case RepeatableRead => valuePtr = Int64(SQL_TXN_REPEATABLE_READ)
                 case Serializable => valuePtr = Int64(SQL_TXN_SERIALIZABLE)
-                case Unspecified => valuePtr = Int64(SQL_TXN_REPEATABLE_READ)
+                case Unspecified => valuePtr = Int64(SQL_TXN_READ_COMMITTED)
                 case _ => throw SqlException(" ${value} mode not supported.")
+            }
+            var ret0 = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT) }
+            if (!SQLSucceeded(ret0)) {
+                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                throw exception
             }
             var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER) }
             if (!SQLSucceeded(ret)) {
@@ -74,31 +105,6 @@ public class OdbcTransaction <: Transaction {
         }
         this.DBC_handlePtr = DBC_handlePtr
         this.odbcConnection = odbcConnection
-        var infoValue: UInt32
-        unsafe {
-            var infoValuePtr = malloc(LEN_MALLOC_4)
-            if (infoValuePtr.isNull()) {
-                throw SqlException("Native malloc Failed.")
-            }
-            var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
-            if (!SQLSucceeded(ret)) {
-                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                free(infoValuePtr)
-                throw exception
-            }
-            infoValue = CPointer<UInt32>(infoValuePtr).read()
-            free(infoValuePtr)
-        }
-
-        if (infoValue == SQL_TXN_READ_UNCOMMITTED) {
-            level = ReadUncommitted
-        } else if (infoValue == SQL_TXN_READ_COMMITTED) {
-            level = ReadCommitted
-        } else if (infoValue == SQL_TXN_REPEATABLE_READ) {
-            level = RepeatableRead
-        } else if (infoValue == SQL_TXN_SERIALIZABLE) {
-            level = Serializable
-        }
     }
 
     /*

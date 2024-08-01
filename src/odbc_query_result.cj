@@ -30,6 +30,9 @@ public class OdbcQueryResult <: QueryResult {
      * 返回值 Bool - 存在下一行则返回 true，否则返回 false
      */
     public override func next(values: Array<SqlDbType>): Bool {
+        if (values.size <= 0) {
+            throw SqlException("Data query failed")
+        }
         var res = unsafe { SQLFetch(STMT_handle) }
         if (res == SQL_NO_DATA) {
             return false
