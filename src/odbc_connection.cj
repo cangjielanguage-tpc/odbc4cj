@@ -131,7 +131,7 @@ public class OdbcConnection <: Connection {
                 var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 throw exception
             }
-            var statement = OdbcStatement(STMT_handlePtr1)
+            var statement = OdbcStatement(STMT_handlePtr1, this)
             return statement
         }
     }
@@ -153,6 +153,7 @@ public class OdbcConnection <: Connection {
         }
         closed.store(true)
         unsafe {
+		    SQLDisconnect(this.DBC_handlePtr)
             SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
         }
     }

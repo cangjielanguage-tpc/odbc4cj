@@ -7,9 +7,14 @@ package odbc4cj
 public class OdbcStatement <: Statement {
     private var STMT_handlePtr: CPointer<Unit>
     private let closed = AtomicBool(false)
+    var odbcConnection: OdbcConnection
 
-    init(STMT_handlePtr: CPointer<Unit>) {
+    init(STMT_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
+        if (odbcConnection.isClosed()) {
+            throw SqlException("The database connection has been closed")
+        }
         this.STMT_handlePtr = STMT_handlePtr
+        this.odbcConnection = odbcConnection
     }
 
     /*
