@@ -37,7 +37,7 @@ public class OdbcStatement <: Statement {
                 var len = CPointer<Int16>(ParameterCountPtr).read()
                 LibC.free<Int16>(ParameterCountPtr)
                 if (len != 0) {
-                    var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), item: OdbcColumnInfo())
+                    var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), repeat: OdbcColumnInfo())
                     var parameterSizePtr = LibC.malloc<Int64>()
                     var dataTypePtr = LibC.malloc<Int16>()
                     var decimalDigitsPtr = LibC.malloc<Int16>()
@@ -189,7 +189,7 @@ public class OdbcStatement <: Statement {
     }
 
     private func getParamInfo(params: Array<SqlDbType>): Array<ParamInfo> {
-        var paramInfo = Array<ParamInfo>(params.size, item: ParamInfo())
+        var paramInfo = Array<ParamInfo>(params.size, repeat: ParamInfo())
         for (i in 0..params.size) {
             match (params[i]) {
                 case v: SqlChar => paramInfo[i] = setString(v.value, SQL_CHAR)
@@ -362,7 +362,7 @@ public class OdbcStatement <: Statement {
         if (SQLSucceeded(ret)) {
             var columnCount = unsafe { columnCountPtr.read() }
             if (columnCount > 0) {
-                var arrOdbcColumnInfo = Array<OdbcColumnInfo>(Int64(columnCount), item: OdbcColumnInfo())
+                var arrOdbcColumnInfo = Array<OdbcColumnInfo>(Int64(columnCount), repeat: OdbcColumnInfo())
                 var bufferLength: Int16 = 1024
                 var columnNamePtr = LibC.malloc<UInt8>(count: Int64(bufferLength))
                 var columnName = CString(columnNamePtr)
@@ -494,7 +494,7 @@ public class OdbcStatement <: Statement {
 
         match(value) {
             case Some(v) =>
-                var arr: Array<Byte> = Array<Byte>(1, item: 0)
+                var arr: Array<Byte> = Array<Byte>(1, repeat: 0)
                 var list: ArrayList<Byte> = ArrayList<Byte>()
                 var length: Int64 = 0
                 while (true) {
@@ -536,7 +536,7 @@ public class OdbcStatement <: Statement {
 
         match(value) {
             case Some(v) =>
-                var arr: Array<Byte> = Array<Byte>(1, item: 0)
+                var arr: Array<Byte> = Array<Byte>(1, repeat: 0)
                 var list: ArrayList<Byte> = ArrayList<Byte>()
                 var length: Int64 = 0
                 while (true) {
