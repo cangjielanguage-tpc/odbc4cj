@@ -43,7 +43,7 @@ public class OdbcTest {
         @Assert("SqlBlob", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
             case v: SqlBlob =>
-                var a = Array<UInt8>(8, item: 0)
+                var a = Array<UInt8>(8, repeat: 0)
                 v.value.read(a)
                 @Assert([11, 22, 33, 44, 55, 66, 77, 88].toString(), a.toString())
             case _ => @Assert("abc", "123")
@@ -53,7 +53,7 @@ public class OdbcTest {
             case v: SqlNullableBlob =>
                 match(v.value) {
                     case Some(v) =>
-                        var a = Array<UInt8>(1, item: 0)
+                        var a = Array<UInt8>(1, repeat: 0)
                         v.read(a)
                         @Assert(None<Array<UInt8>>, a)
                     case None => @Assert(None<String>, None<String>)
