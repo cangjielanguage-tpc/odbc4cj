@@ -218,7 +218,7 @@ public class OdbcQueryResult <: QueryResult {
             }
 
             unsafe { LibC.free(buffer.data) }
-            var stream = ByteArrayStream()
+            var stream = ByteBuffer()
             stream.write(arr)
             return Some(stream)
         }
@@ -236,7 +236,7 @@ public class OdbcQueryResult <: QueryResult {
             }
 
             unsafe { LibC.free(buffer.data) }
-            var stream = ByteArrayStream()
+            var stream = ByteBuffer()
             stream.write(arr)
             return Some(stream)
         }

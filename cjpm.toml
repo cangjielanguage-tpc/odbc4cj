@@ -4,7 +4,7 @@
   odbc = {path = "./lib/"}
 
 [package]
-  cjc-version = "0.55.3"
+  cjc-version = "0.56.4"
   compile-option = "-O2 -Woff unused"
   description = "nothing here"
   link-option = ""

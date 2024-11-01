@@ -28,7 +28,7 @@ main() {
                         prepareStatement = conn.prepareStatement("create table test(data blob(5000) NOT NULL, datanull blob(20))")
                         rowCount = prepareStatement.update()
                         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-                        var str = ByteArrayStream(20)
+                        var str = ByteBuffer(20)
                         str.write([11, 22, 33, 44, 55, 66, 77, 88])
                         var reFlag = prepareStatement.update([SqlBlob(str), SqlNullableBlob(None)]).rowCount
                     if(reFlag==1){
@@ -78,7 +78,7 @@ public func testParseParameterMap():Int64 {
         prepareStatement = conn.prepareStatement("create table test(data blob(5000) NOT NULL, datanull blob(20))")
         rowCount = prepareStatement.update()
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        var str = ByteArrayStream(20)
+        var str = ByteBuffer(20)
         str.write([11, 22, 33, 44, 55, 66, 77, 88])
         var row = prepareStatement.update([SqlBlob(str), SqlNullableBlob(None)]).rowCount
         return row
