@@ -36,7 +36,7 @@ public class blob_002 {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        var str = ByteArrayStream(5000)
+        var str = ByteBuffer(5000)
         str.write(arr1)
         println(str.length)
         rowCount = prepareStatement.update([SqlBlob(str), SqlNullableBlob(None)])

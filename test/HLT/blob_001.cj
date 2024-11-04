@@ -25,7 +25,7 @@ public class blob_001 {
     @TestCase
     public func blob_001(): Unit {
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        var str = ByteArrayStream(20)
+        var str = ByteBuffer(20)
         str.write([11,22,33])
         rowCount = prepareStatement.update([SqlBlob(str), SqlNullableBlob(None)])
         @Assert(1, rowCount.rowCount)

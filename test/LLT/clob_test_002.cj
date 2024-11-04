@@ -34,7 +34,7 @@ public class OdbcTest {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
-        var str = ByteArrayStream()
+        var str = ByteBuffer()
         str.write(s.toArray())
         str.write([0])
         rowCount = prepareStatement.update([SqlClob(str), SqlNullableClob(None)])
