@@ -197,7 +197,7 @@ public class OdbcQueryResult <: QueryResult {
             return None
         } else {
             var colValuePtr = CPointer<Byte>(buffer.data)
-            var arr = Array<Byte>(buffer.len, repeat: 0)
+            var arr = Array<Byte>(buffer.len, item: 0)
             for (i in 0..buffer.len) {
                 arr[i] = unsafe { colValuePtr.read(i) }
             }
@@ -212,13 +212,13 @@ public class OdbcQueryResult <: QueryResult {
             return None
         } else {
             var colValuePtr = CPointer<Byte>(buffer.data)
-            var arr = Array<Byte>(buffer.len, repeat: 0)
+            var arr = Array<Byte>(buffer.len, item: 0)
             for (i in 0..buffer.len) {
                 arr[i] = unsafe { colValuePtr.read(i) }
             }
 
             unsafe { LibC.free(buffer.data) }
-            var stream = ByteBuffer()
+            var stream = ByteArrayStream()
             stream.write(arr)
             return Some(stream)
         }
@@ -230,13 +230,13 @@ public class OdbcQueryResult <: QueryResult {
             return None
         } else {
             var colValuePtr = CPointer<Byte>(buffer.data)
-            var arr = Array<Byte>(buffer.len, repeat: 0)
+            var arr = Array<Byte>(buffer.len, item: 0)
             for (i in 0..buffer.len) {
                 arr[i] = unsafe { colValuePtr.read(i) }
             }
 
             unsafe { LibC.free(buffer.data) }
-            var stream = ByteBuffer()
+            var stream = ByteArrayStream()
             stream.write(arr)
             return Some(stream)
         }

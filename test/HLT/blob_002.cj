@@ -36,7 +36,7 @@ public class blob_002 {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        var str = ByteBuffer(5000)
+        var str = ByteArrayStream(5000)
         str.write(arr1)
         println(str.length)
         rowCount = prepareStatement.update([SqlBlob(str), SqlNullableBlob(None)])
@@ -48,7 +48,7 @@ public class blob_002 {
         @Assert("SqlBlob", queryResult.columnInfos[0].typeName)
         match (arr[0]) {
             case v: SqlBlob =>
-                var a = Array<UInt8>(arr1.size, repeat: 0)
+                var a = Array<UInt8>(arr1.size, item: 0)
                 v.value.read(a)
                 @Assert(arr1.toString(), a.toString())
             case _ => @Assert("abc", "123")
@@ -58,7 +58,7 @@ public class blob_002 {
             case v: SqlNullableBlob =>
                 match(v.value) {
                     case Some(v) =>
-                        var a = Array<UInt8>(1, repeat: 0)
+                        var a = Array<UInt8>(1, item: 0)
                         v.read(a)
                         @Assert(None<Array<UInt8>>, a)
                     case None => @Assert(None<String>, None<String>)
