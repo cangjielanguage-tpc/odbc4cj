@@ -29,9 +29,21 @@ public class OdbcConnection <: Connection {
         /* Connect to database */
         unsafe {
             let csDateBase = LibC.mallocCString(dateBase)
+            if (csDateBase.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             let csUserName = LibC.mallocCString(userName)
+            if (csUserName.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             let csPassword = LibC.mallocCString(password)
+            if (csPassword.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             ret = SQLConnect(DBC_handlePtr, csDateBase, SQL_NTS, csUserName, SQL_NTS, csPassword, SQL_NTS)
+            if (DBC_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             LibC.free(csDateBase)
             LibC.free(csUserName)
             LibC.free(csPassword)
@@ -84,6 +96,9 @@ public class OdbcConnection <: Connection {
             if (infoValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
+            if (DBC_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             var ret = SQLGetInfo(DBC_handlePtr, infoType, CPointer<Unit>(infoValuePtr), len, CPointer<Unit>())
             if (!SQLSucceeded(ret)) {
                 var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
@@ -117,19 +132,37 @@ public class OdbcConnection <: Connection {
             if (STMT_handlePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
+            if (DBC_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             var ret: Int16 = unsafe { SQLAllocHandle(SQL_HANDLE_STMT, DBC_handlePtr, STMT_handlePtr) }
             if (!SQLSucceeded(ret)) {
                 var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 unsafe { SQLFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr) }
                 throw exception
             }
+            if (STMT_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            if (DBC_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             var STMT_handlePtr1: CPointer<Unit> = STMT_handlePtr.read()
+            if (STMT_handlePtr1.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             let csql = LibC.mallocCString(sql)
+            if (csql.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             ret = SQLPrepare(STMT_handlePtr1, csql, csql.size())
             LibC.free(csql)
             if (!SQLSucceeded(ret)) {
                 var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
                 throw exception
+            }
+            if (STMT_handlePtr1.isNull()) {
+                throw SqlException("Native malloc Failed.")
             }
             var statement = OdbcStatement(STMT_handlePtr1, this)
             return statement
@@ -141,6 +174,9 @@ public class OdbcConnection <: Connection {
      * 异常 SqlException - 已经处于事务状态，不支持并行事务。
      */
     public override func createTransaction(): OdbcTransaction {
+        if (DBC_handlePtr.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
         OdbcTransaction(DBC_handlePtr, this)
     }
 

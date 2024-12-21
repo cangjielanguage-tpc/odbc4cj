@@ -39,9 +39,21 @@ public class OdbcStatement <: Statement {
                 if (len != 0) {
                     var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), repeat: OdbcColumnInfo())
                     var parameterSizePtr = LibC.malloc<Int64>()
+                    if (parameterSizePtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
                     var dataTypePtr = LibC.malloc<Int16>()
+                    if (dataTypePtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
                     var decimalDigitsPtr = LibC.malloc<Int16>()
+                    if (decimalDigitsPtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
                     var nullablePtr = LibC.malloc<Int16>()
+                    if (nullablePtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
                     for (i in 0..len) {
                         var parameterNumber = i + 1
                         unsafe {
@@ -236,6 +248,9 @@ public class OdbcStatement <: Statement {
     private func generateUpdateResult(): OdbcUpdateResult {
         var updateResult: OdbcUpdateResult
         var rowCountPtr = LibC.malloc<Int64>()
+        if (rowCountPtr.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
         unsafe { rowCountPtr.write(0) }
         var ret = unsafe { SQLRowCount(STMT_handlePtr, rowCountPtr) }
         if (SQLSucceeded(ret)) {
@@ -357,7 +372,9 @@ public class OdbcStatement <: Statement {
     private func generateQueryResult(): OdbcQueryResult {
         var queryResult: OdbcQueryResult
         var columnCountPtr = unsafe { LibC.malloc<Int16>() }
-
+        if (columnCountPtr.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
         var ret = unsafe { SQLNumResultCols(STMT_handlePtr, columnCountPtr) }
         if (SQLSucceeded(ret)) {
             var columnCount = unsafe { columnCountPtr.read() }
@@ -365,12 +382,55 @@ public class OdbcStatement <: Statement {
                 var arrOdbcColumnInfo = Array<OdbcColumnInfo>(Int64(columnCount), repeat: OdbcColumnInfo())
                 var bufferLength: Int16 = 1024
                 var columnNamePtr = LibC.malloc<UInt8>(count: Int64(bufferLength))
+                if (columnNamePtr.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
                 var columnName = CString(columnNamePtr)
                 var nameLengthPtr = LibC.malloc<Int16>()
+                if (nameLengthPtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
                 var dataTypePtr = LibC.malloc<Int16>()
+                if (dataTypePtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
                 var columnSizePtr = LibC.malloc<Int64>()
+                if (columnSizePtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                        LibC.free<Int16>(dataTypePtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
                 var decimalDigitsPtr = LibC.malloc<Int16>()
+                if (decimalDigitsPtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                        LibC.free<Int16>(dataTypePtr)
+                        LibC.free<Int64>(columnSizePtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
                 var nullablePtr = LibC.malloc<Int16>()
+                if (nullablePtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                        LibC.free<Int16>(dataTypePtr)
+                        LibC.free<Int64>(columnSizePtr)
+                        LibC.free<Int16>(decimalDigitsPtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
                 for (i in 0..columnCount) {
                     var columnNumber = i + 1
                     unsafe {

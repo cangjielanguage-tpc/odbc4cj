@@ -33,6 +33,9 @@ public class OdbcQueryResult <: QueryResult {
         if (values.size <= 0) {
             throw SqlException("Data query failed")
         }
+        if (STMT_handle.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
         var res = unsafe { SQLFetch(STMT_handle) }
         if (res == SQL_NO_DATA) {
             return false
