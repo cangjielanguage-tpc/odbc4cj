@@ -53,6 +53,9 @@ public class OdbcDatasource <: Datasource {
                 throw SqlException("Unable to set SQL_ATTR_ODBC_VERSION attribute.")
             }
             var ENV_handle: CPointer<Unit> = ENV_handlePtr.read()
+            if (ENV_handlePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
 
             var DBC_handlePtr = CPointer<CPointer<Unit>>()
             var ret: Int16
@@ -66,11 +69,15 @@ public class OdbcDatasource <: Datasource {
                 unsafe { SQLFreeHandle(SQL_HANDLE_ENV, ENV_handle) }
                 throw exception
             }
+            let DBC_handle = DBC_handlePtr.read()
+            if (DBC_handle.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
             for (i in 0..opts.size) {
                 if (opts[i][0] == "SQL_ATTR_AUTOCOMMIT") {
                     if (opts[i][1] == "SQL_AUTOCOMMIT_OFF") {
                         /* Set autocommit attribute */
-                        ret = unsafe { SQLSetConnectAttr(DBC_handlePtr.read(), SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER) }
+                        ret = unsafe { SQLSetConnectAttr(DBC_handle, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER) }
                         if (!SQLSucceeded(ret)) {
                             unsafe { diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr.read()) }
                         }
@@ -81,7 +88,7 @@ public class OdbcDatasource <: Datasource {
                     throw SqlException("Only supported SQL_ATTR_AUTOCOMMIT.")
                 }
             }
-            var conn =  OdbcConnection(DBC_handlePtr.read(), dateBase, userName, password) 
+            var conn =  OdbcConnection(DBC_handle, dateBase, userName, password) 
             return conn
         }
     }
