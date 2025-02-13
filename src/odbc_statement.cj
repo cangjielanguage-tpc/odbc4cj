@@ -562,7 +562,7 @@ public class OdbcStatement <: Statement {
                     if (date == 0) {
                         break
                     }
-                    list.append(arr[0])
+                    list.add(arr[0])
                     length++
                 }
                 unsafe {
@@ -604,7 +604,7 @@ public class OdbcStatement <: Statement {
                     if (date == 0) {
                         break
                     }
-                    list.append(arr[0])
+                    list.add(arr[0])
                     length++
                 }
                 unsafe {
