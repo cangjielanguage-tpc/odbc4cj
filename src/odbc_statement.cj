@@ -828,7 +828,7 @@ public class OdbcStatement <: Statement {
             let realValue: DateTime = value.getOrThrow()
             var date = DATE_STRUCT()
             date.year = Int16(realValue.year)
-            date.month = Int16(realValue.monthValue)
+            date.month = Int16(realValue.month.toInteger())
             date.day = Int16(realValue.dayOfMonth)
 
             unsafe { parameterValuePtr.write(date) }
@@ -889,7 +889,7 @@ public class OdbcStatement <: Statement {
             let realValue: DateTime = value.getOrThrow()
             var timestamp = TIMESTAMP_STRUCT()
             timestamp.year = Int16(realValue.year)
-            timestamp.month = Int16(realValue.monthValue)
+            timestamp.month = Int16(realValue.month.toInteger())
             timestamp.day = Int16(realValue.dayOfMonth)
             timestamp.hour = Int16(realValue.hour)
             timestamp.minute = Int16(realValue.minute)
