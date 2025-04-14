@@ -314,5 +314,5 @@ struct ParamInfo {
     var isString: Bool = false
     var cstring: CString = CString(CPointer<UInt8>())
     var isArrary: Bool = false
-    var cptrHand: CPointerHandle<UInt8> = CPointerHandle<UInt8>()
+    var cptrHand: CPointerHandle<UInt8> = unsafe { acquireArrayRawData<UInt8>(Array<UInt8>()) }
 }

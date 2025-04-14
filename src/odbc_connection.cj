@@ -21,8 +21,7 @@ public class OdbcConnection <: Connection {
      * 初始化数据库连接
      */
     init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String) {
-        let rnd = Random()
-        rnd.seed = UInt64(DateTime.now().toUnixTimeStamp().toMilliseconds())
+        let rnd = Random(UInt64(DateTime.now().toUnixTimeStamp().toMilliseconds()))
         this.objIdValue = rnd.nextUInt64()
         var ret: Int16
         this.DBC_handlePtr = DBC_handlePtr

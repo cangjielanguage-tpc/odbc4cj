@@ -628,7 +628,7 @@ public class OdbcQueryResult <: QueryResult {
             return None
         } else {
             var colValue = CString(CPointer<UInt8>(buffer.data))
-            var ret = Some(Decimal(colValue.toString()))
+            var ret = Some(Decimal.parse(colValue.toString()))
             unsafe { LibC.free(buffer.data) }
             return ret
         }
