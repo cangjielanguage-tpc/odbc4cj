@@ -11,6 +11,7 @@ import odbc4cj.*
 public class OdbcTest {
     init() {
     }
+    
     @TestCase
     public func test001(): Unit {
         var driver = OdbcDriver()
@@ -23,22 +24,19 @@ public class OdbcTest {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        rowCount = prepareStatement.update([SqlSmallInt(Int16.Max), SqlNullableSmallInt(None)])
+        prepareStatement.set<Int16>(0, Int16.Max)
+        prepareStatement.set<Option<Int16>>(1, Option<Int16>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlSmallInt(Int16.Max), SqlNullableSmallInt(None)]
-        queryResult.next(arr)
-        @Assert("SqlSmallInt", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlSmallInt => @Assert(Int16.Max, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableSmallInt", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableSmallInt => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlInt16", queryResult.columnInfos[0].typeName)
+        @Assert("SqlInt16", queryResult.columnInfos[1].typeName)
+        @Assert(Int16.Max, queryResult.get<Int16>(0))
+        @Assert(None, queryResult.getOrNull<Int16>(1))
         queryResult.close()
     }
 }

@@ -1,6 +1,6 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -12,7 +12,8 @@ public class bigint_001 {
     var conn: OdbcConnection
     var prepareStatement: OdbcStatement
     var rowCount: OdbcUpdateResult
-    init(){
+
+    init() {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         conn = database.connect()
@@ -27,22 +28,19 @@ public class bigint_001 {
     @TestCase
     public func bigint_001(): Unit {
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        var rowCount = prepareStatement.update([SqlBigInt(Int64.Max), SqlNullableBigInt(None)])
+        prepareStatement.set<Int64>(0, Int64.Max)
+        prepareStatement.set<Option<Int64>>(1, Option<Int64>.None)
+        // prepareStatement.setNull(1)
+        var rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlBigInt(0), SqlNullableBigInt(0)]
-        queryResult.next(arr)
-        @Assert("SqlBigInt", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlBigInt => @Assert(Int64.Max, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableBigInt", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableBigInt => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlInt64", queryResult.columnInfos[0].typeName)
+        @Assert("SqlInt64", queryResult.columnInfos[1].typeName)
+        @Assert(Int64.Max, queryResult.get<Int64>(0))
+        @Assert(None, queryResult.getOrNull<Int64>(1))
         queryResult.close()
     }
 }

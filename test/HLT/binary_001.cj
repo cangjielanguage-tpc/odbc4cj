@@ -1,6 +1,6 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -11,7 +11,8 @@ public class binary_001 {
     var conn: OdbcConnection
     var prepareStatement: OdbcStatement
     var rowCount: OdbcUpdateResult
-    init(){
+
+    init() {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         conn = database.connect()
@@ -26,22 +27,19 @@ public class binary_001 {
     @TestCase
     public func test001(): Unit {
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        rowCount = prepareStatement.update([SqlBinary([0,22]), SqlNullableBinary(None)])
+        let arr: Array<Byte> = [0, 22]
+        prepareStatement.set<Array<Byte>>(0, arr)
+        prepareStatement.set<Option<Array<Byte>>>(1, Option<Array<Byte>>.None)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlBinary([0,11]), SqlNullableBinary(None)]
-        queryResult.next(arr)
-        @Assert("SqlBinary", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlBinary => @Assert(true, v.value[..2]==[0, 22])
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableBinary", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableBinary => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlArrayByte", queryResult.columnInfos[0].typeName)
+        @Assert("SqlArrayByte", queryResult.columnInfos[1].typeName)
+        @Assert(arr, queryResult.get<Array<Byte>>(0)[..2])
+        @Assert(None, queryResult.getOrNull<Array<Byte>>(1))
         queryResult.close()
     }
 }

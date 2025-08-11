@@ -2,9 +2,9 @@
 <h1>odbc4cj</h1>
 </div>
 <p align="center">
-<img alt="" src="https://img.shields.io/badge/release-v0.0.1-brightgreen" style="display: inline-block;" />
+<img alt="" src="https://img.shields.io/badge/release-v1.0.0-brightgreen" style="display: inline-block;" />
 <img alt="" src="https://img.shields.io/badge/build-pass-brightgreen" style="display: inline-block;" />
-<img alt="" src="https://img.shields.io/badge/cjc-v0.59.6-brightgreen" style="display: inline-block;" />
+<img alt="" src="https://img.shields.io/badge/cjc-v1.0.0-brightgreen" style="display: inline-block;" />
 <img alt="" src="https://img.shields.io/badge/cjcov-80.8%25-red" style="display: inline-block;" />
 <img alt="" src="https://img.shields.io/badge/project-open-brightgreen" style="display: inline-block;" />
 </p>
@@ -149,7 +149,10 @@ windows 运行
 ### 功能示例
 
 ```cangjie
-import std.database.sql.* 
+// EXEC: cjc %import-path %L %l %f
+// EXEC: ./main
+
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -161,28 +164,38 @@ main() {
     var conn = database.connect()
     var prepareStatement = conn.prepareStatement("drop table if exists test")
     var rowCount = prepareStatement.update()
+    println(rowCount.rowCount)
     prepareStatement = conn.prepareStatement("create table test(data int NOT NULL, datanull int)")
     rowCount = prepareStatement.update()
+    println(rowCount.rowCount)
     prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-    rowCount = prepareStatement.update([SqlInteger(12345), SqlNullableInteger(None)])
+    prepareStatement.set<Int32>(0, 12345)
+    prepareStatement.set<Option<Int32>>(1, Option<Int32>.None)
+    // prepareStatement.setNull(1)
+    rowCount = prepareStatement.update()
+    println(rowCount.rowCount)
     prepareStatement = conn.prepareStatement("select * from test")
     var queryResult = prepareStatement.query()
-    var arr: Array<SqlDbType> = [SqlInteger(1), SqlNullableInteger(1)]
-    queryResult.next(arr)
-    match (arr[0]) {
-        case v: SqlInteger => println(v.value)
-        case _ => ()
-    }
-    match (arr[1]) {
-        case v: SqlNullableInteger => println(v.value)
-        case _ => ()
-    }
+    let a = queryResult.next()
+    println(a)
+    println(queryResult.columnInfos[0].typeName)
+    println(queryResult.columnInfos[1].typeName)
+    println(queryResult.get<Int32>(0))
+    println(queryResult.getOrNull<Int32>(1))
+    queryResult.close()
 }
+
 ```
 
 执行结果如下：
 
 ```
+0
+0
+1
+true
+SqlInt32
+SqlInt32
 12345
 None
 ```

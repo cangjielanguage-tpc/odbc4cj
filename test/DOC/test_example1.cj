@@ -13,20 +13,23 @@ main() {
     var conn = database.connect()
     var prepareStatement = conn.prepareStatement("drop table if exists test")
     var rowCount = prepareStatement.update()
+    println(rowCount.rowCount)
     prepareStatement = conn.prepareStatement("create table test(data int NOT NULL, datanull int)")
     rowCount = prepareStatement.update()
+    println(rowCount.rowCount)
     prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-    rowCount = prepareStatement.update([SqlInteger(12345), SqlNullableInteger(None)])
+    prepareStatement.set<Int32>(0, 12345)
+    prepareStatement.set<Option<Int32>>(1, Option<Int32>.None)
+    // prepareStatement.setNull(1)
+    rowCount = prepareStatement.update()
+    println(rowCount.rowCount)
     prepareStatement = conn.prepareStatement("select * from test")
     var queryResult = prepareStatement.query()
-    var arr: Array<SqlDbType> = [SqlInteger(1), SqlNullableInteger(1)]
-    queryResult.next(arr)
-    match (arr[0]) {
-        case v: SqlInteger => println(v.value)
-        case _ => ()
-    }
-    match (arr[1]) {
-        case v: SqlNullableInteger => println(v.value)
-        case _ => ()
-    }
+    let a = queryResult.next()
+    println(a)
+    println(queryResult.columnInfos[0].typeName)
+    println(queryResult.columnInfos[1].typeName)
+    println(queryResult.get<Int32>(0))
+    println(queryResult.getOrNull<Int32>(1))
+    queryResult.close()
 }

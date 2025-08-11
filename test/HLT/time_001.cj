@@ -1,6 +1,6 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -10,6 +10,7 @@ import odbc4cj.*
 public class OdbcTest {
     init() {
     }
+    
     @TestCase
     public func test001(): Unit {
         var driver = OdbcDriver()
@@ -31,21 +32,23 @@ public class OdbcTest {
             second: 10,
             nanosecond: 0,
         )
-        rowCount = prepareStatement.update([SqlTime(date), SqlNullableTime(None)])
+        prepareStatement.set<OdbcTypeTime>(0, OdbcTypeTime(date))
+        prepareStatement.set<Option<OdbcTypeTime>>(1, Option<OdbcTypeTime>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlTime(date), SqlNullableTime(None)]
-        queryResult.next(arr)
-        @Assert("SqlTime", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlTime => @Assert(date, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableTime", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableTime => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
+
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlOdbcTypeTime", queryResult.columnInfos[0].typeName)
+        @Assert("SqlOdbcTypeTime", queryResult.columnInfos[1].typeName)
+        @Assert(date, queryResult.get<OdbcTypeTime>(0).value)
+        let odbcTypeTime: ?OdbcTypeTime = queryResult.getOrNull<OdbcTypeTime>(1)
+        match (odbcTypeTime) {
+            case Some(v) => @Assert(0, 1)
+            case None => @Assert(1, 1)
         }
         queryResult.close()
     }
