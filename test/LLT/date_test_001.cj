@@ -1,8 +1,7 @@
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
 
-
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -41,21 +40,22 @@ public class OdbcTest {
             second: 0,
             nanosecond: 0,
         )
-        rowCount = prepareStatement.update([SqlDate(date), SqlNullableDate(None)])
+        prepareStatement.set<OdbcTypeDate>(0, OdbcTypeDate(date))
+        prepareStatement.set<Option<OdbcTypeDate>>(1, Option<OdbcTypeDate>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlDate(date), SqlNullableDate(None)]
-        queryResult.next(arr)
-        @Assert("SqlDate", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlDate => @Assert(date, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableDate", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableDate => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlOdbcTypeDate", queryResult.columnInfos[0].typeName)
+        @Assert("SqlOdbcTypeDate", queryResult.columnInfos[1].typeName)
+        @Assert(date, queryResult.get<OdbcTypeDate>(0).value)
+        let odbcTypeDate: ?OdbcTypeDate = queryResult.getOrNull<OdbcTypeDate>(1)
+        match (odbcTypeDate) {
+            case Some(v) => @Assert(0, 1)
+            case None => @Assert(1, 1)
         }
         queryResult.close()
     }

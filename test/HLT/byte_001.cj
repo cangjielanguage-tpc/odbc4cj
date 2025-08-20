@@ -1,6 +1,6 @@
 //3rd_party_lib:odbc4cj/build/odbc4cj
 
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -11,6 +11,7 @@ import odbc4cj.*
 public class OdbcTest {
     init() {
     }
+
     @TestCase
     public func test001(): Unit {
         var driver = OdbcDriver()
@@ -23,22 +24,19 @@ public class OdbcTest {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test values(?,?)")
-        rowCount = prepareStatement.update([SqlByte(Int8.Max), SqlNullableByte(None)])
+        prepareStatement.set<Int8>(0, Int8.Max)
+        prepareStatement.set<Option<Int8>>(1, Option<Int8>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlByte(Int8.Max), SqlNullableByte(None)]
-        queryResult.next(arr)
-        @Assert("SqlByte", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlByte => @Assert(Int8.Max, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableByte", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableByte => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlInt8", queryResult.columnInfos[0].typeName)
+        @Assert("SqlInt8", queryResult.columnInfos[1].typeName)
+        @Assert(Int8.Max, queryResult.get<Int8>(0))
+        @Assert(None, queryResult.getOrNull<Int8>(1))
         queryResult.close()
     }
 }

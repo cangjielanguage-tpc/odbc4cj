@@ -1,8 +1,7 @@
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
 
-
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -28,27 +27,24 @@ public class OdbcTest {
         var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test_llt(data varchar(20) NOT NULL, datanull varchar(20))")
+        prepareStatement = conn.prepareStatement(
+            "create table test_llt(data varchar(20) NOT NULL, datanull varchar(20))")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
-        rowCount = prepareStatement.update([SqlVarchar("12345678"), SqlNullableVarchar(None)])
-        println(rowCount.rowCount)
+        prepareStatement.set<String>(0, "12345678")
+        prepareStatement.set<Option<String>>(1, Option<String>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlVarchar("abc"), SqlNullableVarchar(None)]
-        queryResult.next(arr)
-        @Assert("SqlVarchar", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlVarchar => @Assert("12345678", v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableVarchar", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableVarchar => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlString", queryResult.columnInfos[0].typeName)
+        @Assert("SqlString", queryResult.columnInfos[1].typeName)
+        @Assert("12345678", queryResult.get<String>(0))
+        @Assert(None, queryResult.getOrNull<String>(1))
         queryResult.close()
     }
 }

@@ -1,8 +1,7 @@
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
 
-
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -41,19 +40,22 @@ public class OdbcTest {
             second: 35,
             nanosecond: 0,
         )
-        rowCount = prepareStatement.update([SqlTimestampWithoutTz(date), SqlNullableTimestampWithoutTz(None)])
+        prepareStatement.set<DateTime>(0, date)
+        prepareStatement.set<Option<DateTime>>(1, Option<DateTime>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlTimestampWithoutTz(DateTime.now()), SqlNullableTimestampWithoutTz(None)]
-        queryResult.next(arr)
-        match (arr[0]) {
-            case v: SqlTimestampWithoutTz => @Assert(date, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        match (arr[1]) {
-            case v: SqlNullableTimestampWithoutTz => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlOdbcTypeTimeTimestamp", queryResult.columnInfos[0].typeName)
+        @Assert("SqlOdbcTypeTimeTimestamp", queryResult.columnInfos[1].typeName)
+        @Assert(date, queryResult.get<DateTime>(0))
+        let dateTime: ?DateTime = queryResult.getOrNull<DateTime>(1)
+        match (dateTime) {
+            case Some(v) => @Assert(0, 1)
+            case None => @Assert(1, 1)
         }
         queryResult.close()
     }

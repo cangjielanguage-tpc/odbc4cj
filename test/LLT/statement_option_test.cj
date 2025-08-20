@@ -1,8 +1,7 @@
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
 
-
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -38,22 +37,19 @@ public class OdbcTest {
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
-        rowCount = prepareStatement.update([SqlInteger(Int32.Max), SqlNullableInteger(None)])
+        prepareStatement.set<Int32>(0, Int32.Max)
+        prepareStatement.set<Option<Int32>>(1, Option<Int32>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlInteger(Int32.Max), SqlNullableInteger(None)]
-        queryResult.next(arr)
-        @Assert("SqlInteger", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlInteger => @Assert(Int32.Max, v.value)
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableInteger", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableInteger => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlInt32", queryResult.columnInfos[0].typeName)
+        @Assert("SqlInt32", queryResult.columnInfos[1].typeName)
+        @Assert(Int32.Max, queryResult.get<Int32>(0))
+        @Assert(None, queryResult.getOrNull<Int32>(1))
         queryResult.close()
     }
 }

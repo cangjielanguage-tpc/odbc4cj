@@ -1,8 +1,7 @@
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
 
-
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -28,26 +27,25 @@ public class OdbcTest {
         var prepareStatement = conn.prepareStatement("drop table if exists test_llt")
         var rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
-        prepareStatement = conn.prepareStatement("create table test_llt(data VarBinary(20) NOT NULL, datanull VarBinary(20))")
+        prepareStatement = conn.prepareStatement(
+            "create table test_llt(data VarBinary(20) NOT NULL, datanull VarBinary(20))")
         rowCount = prepareStatement.update()
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
-        rowCount = prepareStatement.update([SqlVarBinary([11,22]), SqlNullableVarBinary(None)])
+        let arr: Array<Byte> = [11, 22]
+        prepareStatement.set<Array<Byte>>(0, arr)
+        prepareStatement.set<Option<Array<Byte>>>(1, Option<Array<Byte>>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlVarBinary([11,22]), SqlNullableVarBinary(None)]
-        queryResult.next(arr)
-        @Assert("SqlVarBinary", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlVarBinary => @Assert(true, v.value[..2]==[11, 22])
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableVarBinary", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableVarBinary => @Assert(None, v.value)
-            case _ => @Assert("abc", "123")
-        }
+        let a = queryResult.next()
+        @Assert(true, a)
+        @Assert("SqlArrayByte", queryResult.columnInfos[0].typeName)
+        @Assert("SqlArrayByte", queryResult.columnInfos[1].typeName)
+        @Assert(arr, queryResult.get<Array<Byte>>(0)[..2])
+        @Assert(None, queryResult.getOrNull<Array<Byte>>(1))
         queryResult.close()
     }
 }

@@ -1,21 +1,14 @@
 /*
  * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
  */
- 
+
 package odbc4cj
 
 public class OdbcStatement <: Statement {
     private var STMT_handlePtr: CPointer<Unit>
     private let closed = AtomicBool(false)
     var odbcConnection: OdbcConnection
-
-    init(STMT_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
-        if (odbcConnection.isClosed()) {
-            throw SqlException("The database connection has been closed")
-        }
-        this.STMT_handlePtr = STMT_handlePtr
-        this.odbcConnection = odbcConnection
-    }
+    private var params: ?Array<Any> = None
 
     /*
      * 预执行sql语句中，占位参数的列信息，比如列名，列类型，列长度，是否允许数据库Null值等
@@ -68,7 +61,7 @@ public class OdbcStatement <: Statement {
                                 throw exception
                             }
                             var nullable = nullablePtr.read()
-                            var typeName = getSqlTypeName(dataTypePtr.read(), nullable)
+                            var typeName = getSqlTypeName(dataTypePtr.read())
                             var odbcColumnInfo = OdbcColumnInfo("", typeName, parameterSizePtr.read(),
                                                                 decimalDigitsPtr.read(), 0, nullable)
                             arrInfo[Int64(i)] = odbcColumnInfo
@@ -86,6 +79,86 @@ public class OdbcStatement <: Statement {
                 }
             }
         }
+    }    
+    
+    /*
+     * 预执行sql语句中，占位参数的列信息，比如列名，列类型，列长度，是否允许数据库Null值等
+     */
+    public prop parameterOldColumnInfos: Array<ColumnInfo> {
+        get() {
+            var ParameterCountPtr = LibC.malloc<Int16>()
+            if (ParameterCountPtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe {
+                ParameterCountPtr.write(0)
+                var ret = SQLNumParams(STMT_handlePtr, ParameterCountPtr)
+                if (!SQLSucceeded(ret)) {
+                    var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                    unsafe { LibC.free<Int16>(ParameterCountPtr) }
+                    throw exception
+                }
+                var len = CPointer<Int16>(ParameterCountPtr).read()
+                LibC.free<Int16>(ParameterCountPtr)
+                if (len != 0) {
+                    var arrInfo: Array<ColumnInfo> = Array<ColumnInfo>(Int64(len), repeat: OdbcColumnInfo())
+                    var parameterSizePtr = LibC.malloc<Int64>()
+                    if (parameterSizePtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
+                    var dataTypePtr = LibC.malloc<Int16>()
+                    if (dataTypePtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
+                    var decimalDigitsPtr = LibC.malloc<Int16>()
+                    if (decimalDigitsPtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
+                    var nullablePtr = LibC.malloc<Int16>()
+                    if (nullablePtr.isNull()) {
+                        throw SqlException("Native malloc Failed.")
+                    }
+                    for (i in 0..len) {
+                        var parameterNumber = i + 1
+                        unsafe {
+                            ret = SQLDescribeParam(STMT_handlePtr, parameterNumber, dataTypePtr, parameterSizePtr,
+                                                decimalDigitsPtr, nullablePtr)
+                            if (!SQLSucceeded(ret)) {
+                                var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                                LibC.free<Int64>(parameterSizePtr)
+                                LibC.free<Int16>(dataTypePtr)
+                                LibC.free<Int16>(decimalDigitsPtr)
+                                LibC.free<Int16>(nullablePtr)
+                                throw exception
+                            }
+                            var nullable = nullablePtr.read()
+                            var typeName = getOldSqlTypeName(dataTypePtr.read(), nullable)
+                            var odbcColumnInfo = OdbcColumnInfo("", typeName, parameterSizePtr.read(),
+                                                                decimalDigitsPtr.read(), 0, nullable)
+                            arrInfo[Int64(i)] = odbcColumnInfo
+                        }
+                    }
+                    unsafe {
+                        LibC.free<Int64>(parameterSizePtr)
+                        LibC.free<Int16>(dataTypePtr)
+                        LibC.free<Int16>(decimalDigitsPtr)
+                        LibC.free<Int16>(nullablePtr)
+                    }
+                    return arrInfo
+                } else {
+                    return Array<ColumnInfo>()
+                }
+            }
+        }
+    }
+
+
+    init(STMT_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
+        if (odbcConnection.isClosed()) {
+            throw SqlException("The database connection has been closed")
+        }
+        this.STMT_handlePtr = STMT_handlePtr
+        this.odbcConnection = odbcConnection
     }
 
     /**
@@ -106,14 +179,166 @@ public class OdbcStatement <: Statement {
     }
 
     /**
+     * 设置预执行sql语句参数
+     *
+     * 参数 index - 位置
+     * 参数 value - 值
+     * 异常 Exception - 参数设置错误。
+     */
+    public override func set<T>(index: Int, value: T): Unit {
+        checkResource()
+        let parameterColumnInfosNew: Array<ColumnInfo> = parameterColumnInfos.clone()
+        // parameterColumnInfosNew.add(all:parameterColumnInfos)
+        if (index < 0) {
+            throw IllegalArgumentException("The parameter index must be greater than 0")
+        }
+        if (this.params.isNone()) {
+            this.params = Array<Any>(parameterColumnInfosNew.size, repeat: Option<Any>.None)
+        }
+        func unwrap<T>(value: ?T) {
+            if (let Some(v) <- value) {
+                params.getOrThrow()[index] = v
+            } else {
+                params.getOrThrow()[index] = Option<T>.None
+            }
+        }
+        match (value) {
+            case v: ?Bool => unwrap(v)
+            case v: ?Int8 => unwrap(v)
+            case v: ?UInt8 => unwrap(v)
+            case v: ?Int16 => unwrap(v)
+            case v: ?UInt16 => unwrap(v)
+            case v: ?Int32 => unwrap(v)
+            case v: ?UInt32 => unwrap(v)
+            case v: ?Int64 => unwrap(v)
+            case v: ?UInt64 => unwrap(v)
+            case v: ?Float16 => unwrap(v)
+            case v: ?Float32 => unwrap(v)
+            case v: ?Float64 => unwrap(v)
+            case v: ?Rune => unwrap(v)
+            case v: ?String => unwrap(v)
+            case v: ?DateTime => unwrap(v)
+            case v: ?BigInt => unwrap(v)
+            case v: ?Decimal => unwrap(v)
+            case v: ?Array<Byte> => unwrap(v)
+            case v: ?InputStream => unwrap(v)
+            case _ => params.getOrThrow()[index] = value
+        }
+    }
+
+    /**
+     * 设置预执行sql语句null参数
+     *
+     * 参数 index - 位置
+     * 异常 Exception - 参数设置错误。
+     */
+    public override func setNull(index: Int): Unit {
+        throw IllegalArgumentException("The setNull method is currently not supported. Please use the set<T> method")
+    }
+
+    /**
+     * 执行sql语句，得到更新结果
+     *
+     * 返回值 UpdateResult - 更新结果。
+     * 异常 Exception - 传入参数错误。
+     */
+    public override func update(): OdbcUpdateResult {
+        checkResource()
+        let parameterColumnInfosNew: Array<ColumnInfo> = parameterColumnInfos.clone()
+        var ret: Int16
+        var result: OdbcUpdateResult
+
+        if (this.params.isNone() && parameterColumnInfosNew.size > 0) {
+            this.params = Array<Any>(parameterColumnInfosNew.size, repeat: Option<Any>.None)
+        }
+        var paramInfo: Array<ParamInfo> = match (params) {
+            case Some(v) =>
+                getParamInfo(v)
+            case None => Array<ParamInfo>()
+        }
+        for (i in 0..parameterColumnInfosNew.size) {
+            ret = unsafe {
+                SQLBindParameter(STMT_handlePtr, i + 1, SQL_PARAM_INPUT, paramInfo[i].valueType,
+                    paramInfo[i].parameterType, paramInfo[i].columnSize, paramInfo[i].decimalDigits,
+                    paramInfo[i].parameterValuePtr, paramInfo[i].bufferLength, paramInfo[i].strLenOrInd)
+            }
+            if (!SQLSucceeded(ret)) {
+                throw diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            }
+        }
+        ret = unsafe { SQLExecute(STMT_handlePtr) }
+        if (SQLSucceeded(ret)) {
+            result = generateUpdateResult()
+        } else if (ret == SQL_NO_DATA) {
+            result = OdbcUpdateResult(0)
+        } else {
+            throw diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            result = OdbcUpdateResult(0)
+        }
+        for (i in 0..parameterColumnInfosNew.size) {
+            unsafe {
+                if (!paramInfo[i].strLenOrInd.isNull()) {
+                    free(CPointer<Unit>(paramInfo[i].strLenOrInd))
+                }
+
+                if (paramInfo[i].isArrary || paramInfo[i].isString) {
+                    releaseArrayRawData(paramInfo[i].cptrHand)
+                } else {
+                    free(paramInfo[i].parameterValuePtr)
+                }
+            }
+        }
+        return result
+    }
+
+    /**
+     * 执行sql语句，得到查询结果
+     *
+     * 返回值 QueryResult - 查询结果。
+     * 异常 Exception - 传入参数错误。
+     */
+    public override func query(): OdbcQueryResult {
+        checkResource()
+        let parameterColumnInfosNew: Array<ColumnInfo> = parameterColumnInfos.clone()
+        var ret: Int16
+        if (this.params.isNone() && parameterColumnInfosNew.size > 0) {
+            this.params = Array<Any>(parameterColumnInfosNew.size, repeat: Option<Any>.None)
+        }
+        var paramInfo: Array<ParamInfo> = match (params) {
+            case Some(v) => getParamInfo(v)
+            case None => Array<ParamInfo>()
+        }
+        if (parameterColumnInfosNew.size > 0) {
+            for (i in 0..parameterColumnInfosNew.size) {
+                ret = unsafe {
+                    SQLBindParameter(STMT_handlePtr, i + 1, SQL_PARAM_INPUT, paramInfo[i].valueType,
+                        paramInfo[i].parameterType, paramInfo[i].columnSize, paramInfo[i].decimalDigits,
+                        paramInfo[i].parameterValuePtr, paramInfo[i].bufferLength, paramInfo[i].strLenOrInd)
+                }
+                if (!SQLSucceeded(ret)) {
+                    diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                }
+            }
+        }
+        ret = unsafe { SQLExecute(STMT_handlePtr) }
+        if (SQLSucceeded(ret)) {
+            return generateQueryResult()
+        } else {
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            return OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
+        }
+    }
+
+    /**
      * 执行 sql 语句，得到更新结果
      * 返回值 UpdateResult - 更新结果。
      * 异常 SqlException - 执行过程中发生了异常，比如网络中断，服务器超时，参数个数不正确
      */
+    @Deprecated
     public override func update(params: Array<SqlDbType>): OdbcUpdateResult {
         var ret: Int16
         var result: OdbcUpdateResult
-        var paramInfo = getParamInfo(params)
+        var paramInfo = getOldParamInfo(params)
 
         for (i in 0..params.size) {
             ret = unsafe { SQLBindParameter(STMT_handlePtr,
@@ -135,7 +360,7 @@ public class OdbcStatement <: Statement {
 
         ret = unsafe { SQLExecute(STMT_handlePtr) }
         if (SQLSucceeded(ret)) {
-            result = generateUpdateResult()
+            result = generateOldUpdateResult()
         } else if (ret == SQL_NO_DATA) {
             result = OdbcUpdateResult(0)
         } else {
@@ -165,13 +390,13 @@ public class OdbcStatement <: Statement {
      * 返回值 QueryResult - 查询结果。
      * 异常 SqlException - 执行过程中发生了异常，比如网络中断，服务器超时，参数个数不正确
      */
+    @Deprecated
     public override func query(params: Array<SqlDbType>): OdbcQueryResult {
         var ret: Int16
-
         if (parameterColumnInfos.size > params.size) {
             throw SqlException("Parameter count isn't ${parameterColumnInfos.size}.")
         } else if (parameterColumnInfos.size > 0) {
-            var paramInfo = getParamInfo(params)
+            var paramInfo = getOldParamInfo(params)
             for (i in 0..parameterColumnInfos.size) {
                 ret = unsafe { SQLBindParameter(STMT_handlePtr,
                                                 i + 1,
@@ -193,51 +418,791 @@ public class OdbcStatement <: Statement {
 
         ret = unsafe { SQLExecute(STMT_handlePtr) }
         if (SQLSucceeded(ret)) {
-            return generateQueryResult()
+            return generateOldQueryResult()
         } else {
             diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
             return OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
         }
     }
 
-    private func getParamInfo(params: Array<SqlDbType>): Array<ParamInfo> {
+    private func getParamInfo(params: Array<Any>): Array<ParamInfo> {
+        var paramInfo: Array<ParamInfo> = Array<ParamInfo>(params.size, repeat: ParamInfo())
+        for (i in 0..params.size) {
+            match (params[i]) {
+                case v: String => paramInfo[i] = setString(v, SQL_CHAR)
+                case v: ?String => paramInfo[i] = setString(v, SQL_CHAR)
+                case v: Array<Byte> => paramInfo[i] = setBytes(v, SQL_BINARY)
+                case v: ?Array<Byte> => paramInfo[i] = setBytes(v, SQL_BINARY)
+                case v: InputStream => paramInfo[i] = setBlob(v)
+                case v: ?InputStream => paramInfo[i] = setBlob(v)
+                case v: Bool => paramInfo[i] = setBool(v)
+                case v: ?Bool => paramInfo[i] = setBool(v)
+                case v: Int8 => paramInfo[i] = setInt8(v)
+                case v: ?Int8 => paramInfo[i] = setInt8(v)
+                case v: UInt8 => paramInfo[i] = setUInt8(v)
+                case v: ?UInt8 => paramInfo[i] = setUInt8(v)
+                case v: Int16 => paramInfo[i] = setInt16(v)
+                case v: ?Int16 => paramInfo[i] = setInt16(v)
+                case v: UInt16 => paramInfo[i] = setUInt16(v)
+                case v: ?UInt16 => paramInfo[i] = setUInt16(v)
+                case v: Int32 => paramInfo[i] = setInt32(v)
+                case v: ?Int32 => paramInfo[i] = setInt32(v)
+                case v: UInt32 => paramInfo[i] = setUInt32(v)
+                case v: ?UInt32 => paramInfo[i] = setUInt32(v)
+                case v: Int64 => paramInfo[i] = setInt64(v)
+                case v: ?Int64 => paramInfo[i] = setInt64(v)
+                case v: UInt64 => paramInfo[i] = setUInt64(v)
+                case v: ?UInt64 => paramInfo[i] = setUInt64(v)
+                case v: Float32 => paramInfo[i] = setFloat32(v)
+                case v: ?Float32 => paramInfo[i] = setFloat32(v)
+                case v: Float64 => paramInfo[i] = setFloat64(v)
+                case v: ?Float64 => paramInfo[i] = setFloat64(v)
+                case v: OdbcTypeDate => paramInfo[i] = setDate(v)
+                case v: ?OdbcTypeDate => paramInfo[i] = setDate(v)
+                case v: OdbcTypeTime => paramInfo[i] = setTime(v)
+                case v: ?OdbcTypeTime => paramInfo[i] = setTime(v)
+                case v: DateTime => paramInfo[i] = setTimestampWithoutTz(v)
+                case v: ?DateTime => paramInfo[i] = setTimestampWithoutTz(v)
+                case v: Decimal => paramInfo[i] = setDecimal(v, SQL_VARCHAR)
+                case v: ?Decimal => paramInfo[i] = setDecimal(v, SQL_VARCHAR)
+                // null
+                case v: ?Any => setNullData(i)
+                case _ => throw SqlException("Unsupported data type.")
+            }
+        }
+        return paramInfo
+    }
+
+    private func generateUpdateResult(): OdbcUpdateResult {
+        var updateResult: OdbcUpdateResult
+        var rowCountPtr = LibC.malloc<Int64>()
+        if (rowCountPtr.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        unsafe { rowCountPtr.write(0) }
+        var ret = unsafe { SQLRowCount(STMT_handlePtr, rowCountPtr) }
+        if (SQLSucceeded(ret)) {
+            updateResult = OdbcUpdateResult(unsafe { rowCountPtr.read() })
+        } else {
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            updateResult = OdbcUpdateResult(0)
+        }
+
+        unsafe { LibC.free<Int64>(rowCountPtr) }
+        return updateResult
+    }
+
+    private func getSqlTypeName(dataType: Int16): String {
+        match (dataType) {
+            case 1 | 12 => return OdbcTypeEnum.SqlString.toString() // SQL_CHAR| SQL_VARCHAR
+            case  -2 | -3  => return OdbcTypeEnum.SqlArrayByte.toString() // SQL_BINARY| SQL_VARBINARY
+            case -1 => return OdbcTypeEnum.SqlClob.toString() // SQL_LONGVARCHAR
+            case  -4 => return OdbcTypeEnum.SqlInputStream.toString() // SQL_LONGVARBINARY
+            case -6 => return OdbcTypeEnum.SqlInt8.toString() // SQL_TINYINT
+            case 5 => return OdbcTypeEnum.SqlInt16.toString() // SQL_SMALLINT
+            case 4 => return OdbcTypeEnum.SqlInt32.toString() // SQL_INTEGER
+            case -5 => return OdbcTypeEnum.SqlInt64.toString() // SQL_BIGINT
+            case 7 => return OdbcTypeEnum.SqlFloat32.toString() // SQL_REAL
+            case 8 => return OdbcTypeEnum.SqlFloat64.toString() // SQL_DOUBLE
+            case 91 => return OdbcTypeEnum.SqlOdbcTypeDate.toString() // MYSQL_TYPE_DATE
+            case 92 => return OdbcTypeEnum.SqlOdbcTypeTime.toString() // SQL_TYPE_TIME
+            case 93 => return OdbcTypeEnum.SqlOdbcTypeTimeTimestamp.toString() // SQL_TYPE_TIMESTAMP
+            case 3 => return OdbcTypeEnum.SqlDecimal.toString() // SQL_DECIMAL
+            case _ => return OdbcTypeEnum.SqlOther.toString()
+        }
+    }
+
+    private func generateQueryResult(): OdbcQueryResult {
+        var queryResult: OdbcQueryResult
+        var columnCountPtr = unsafe { LibC.malloc<Int16>() }
+        if (columnCountPtr.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        var ret = unsafe { SQLNumResultCols(STMT_handlePtr, columnCountPtr) }
+        if (SQLSucceeded(ret)) {
+            var columnCount = unsafe { columnCountPtr.read() }
+            if (columnCount > 0) {
+                var arrOdbcColumnInfo = Array<OdbcColumnInfo>(Int64(columnCount), repeat: OdbcColumnInfo())
+                var bufferLength: Int16 = 1024
+                var columnNamePtr = LibC.malloc<UInt8>(count: Int64(bufferLength))
+                if (columnNamePtr.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
+                var columnName = CString(columnNamePtr)
+                var nameLengthPtr = LibC.malloc<Int16>()
+                if (nameLengthPtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
+                var dataTypePtr = LibC.malloc<Int16>()
+                if (dataTypePtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
+                var columnSizePtr = LibC.malloc<Int64>()
+                if (columnSizePtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                        LibC.free<Int16>(dataTypePtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
+                var decimalDigitsPtr = LibC.malloc<Int16>()
+                if (decimalDigitsPtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                        LibC.free<Int16>(dataTypePtr)
+                        LibC.free<Int64>(columnSizePtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
+                var nullablePtr = LibC.malloc<Int16>()
+                if (nullablePtr.isNull()) {
+                    unsafe {
+                        LibC.free<UInt8>(columnNamePtr)
+                        LibC.free<Int16>(nameLengthPtr)
+                        LibC.free<Int16>(dataTypePtr)
+                        LibC.free<Int64>(columnSizePtr)
+                        LibC.free<Int16>(decimalDigitsPtr)
+                    }
+                    throw SqlException("Native malloc Failed.")
+                }
+                for (i in 0..columnCount) {
+                    var columnNumber = i + 1
+                    unsafe {
+                        ret = SQLDescribeCol(STMT_handlePtr, columnNumber, columnName, bufferLength, nameLengthPtr,
+                            dataTypePtr, columnSizePtr, decimalDigitsPtr, nullablePtr)
+                        if (SQLSucceeded(ret)) {
+                            var typeName: String
+                            var dataType = dataTypePtr.read()
+                            var nullable: Int16
+                            nullable = nullablePtr.read()
+                            typeName = getSqlTypeName(dataType)
+                            var odbcColumnInfo = OdbcColumnInfo(columnName.toString(), typeName, columnSizePtr.read(),
+                                decimalDigitsPtr.read(), 0, nullable)
+                            arrOdbcColumnInfo[Int64(i)] = odbcColumnInfo
+                        } else {
+                            LibC.free<UInt8>(columnNamePtr)
+                            LibC.free<Int16>(nameLengthPtr)
+                            LibC.free<Int16>(dataTypePtr)
+                            LibC.free<Int64>(columnSizePtr)
+                            LibC.free<Int16>(decimalDigitsPtr)
+                            LibC.free<Int16>(nullablePtr)
+                            var exception = diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                            throw exception
+                        }
+                    }
+                }
+                unsafe {
+                    LibC.free<UInt8>(columnNamePtr)
+                    LibC.free<Int16>(nameLengthPtr)
+                    LibC.free<Int16>(dataTypePtr)
+                    LibC.free<Int64>(columnSizePtr)
+                    LibC.free<Int16>(decimalDigitsPtr)
+                    LibC.free<Int16>(nullablePtr)
+                }
+                queryResult = OdbcQueryResult(STMT_handlePtr, arrOdbcColumnInfo)
+            } else {
+                diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+                queryResult = OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
+            }
+        } else {
+            diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr)
+            queryResult = OdbcQueryResult(STMT_handlePtr, Array<OdbcColumnInfo>())
+        }
+        unsafe { LibC.free(columnCountPtr) }
+        return queryResult
+    }
+
+    private func setNullData(index: Int64): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+        info.strLenOrInd = strLenOrInd
+        return info
+    }
+
+    private func setString(value: Option<String>, sqlType: Int16): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        info.valueType = SQL_C_CHAR
+        info.parameterType = sqlType
+        if (value != None) {
+            let realValue: String = value ?? "\0"
+            var cstr = unsafe { LibC.mallocCString(realValue) }
+            var bufferLength = cstr.size()
+            var parameterValuePtr = CPointer<Unit>(cstr.getChars())
+            unsafe { strLenOrInd.write(Int64(SQL_NTS)) }
+            info.parameterValuePtr = parameterValuePtr
+            info.bufferLength = bufferLength
+            info.strLenOrInd = strLenOrInd
+            info.isString = true
+            info.cstring = cstr
+        } else {
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setBytes(value: Option<Array<Byte>>, sqlType: Int16): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        info.valueType = SQL_C_BINARY
+        info.parameterType = sqlType
+        if (value != None) {
+            let realValue: Array<Byte> = value ?? []
+            var cptrHandle = unsafe { acquireArrayRawData(realValue) }
+            var parameterValuePtr = cptrHandle.pointer
+            var columnSize = UInt64(max(realValue.size, 1))
+            var bufferLength = realValue.size
+            unsafe { strLenOrInd.write(bufferLength) }
+            info.columnSize = columnSize
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            info.bufferLength = bufferLength
+            info.strLenOrInd = strLenOrInd
+            info.isArrary = true
+            info.cptrHand = cptrHandle
+        } else {
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setClob(value: Option<InputStream>): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        info.valueType = SQL_C_CHAR
+        info.parameterType = SQL_LONGVARCHAR
+        match (value) {
+            case Some(v) =>
+                var arr: Array<Byte> = Array<Byte>(1, repeat: 0)
+                var list: ArrayList<Byte> = ArrayList<Byte>()
+                var length: Int64 = 0
+                while (true) {
+                    var date: Int64 = v.read(arr)
+                    if (date == 0) {
+                        break
+                    }
+                    list.add(arr[0])
+                    length++
+                }
+                unsafe {
+                    var cp: CPointerHandle<Byte> = acquireArrayRawData<Byte>(list.toArray())
+                    info.parameterValuePtr = CPointer<Unit>(cp.pointer)
+                    info.cptrHand = cp
+                }
+                var columnSize = length
+                unsafe { strLenOrInd.write(length) }
+                info.bufferLength = columnSize
+                info.strLenOrInd = strLenOrInd
+                info.isString = true
+            case None =>
+                unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+                info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setBlob(value: Option<InputStream>): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        info.valueType = SQL_C_BINARY
+        info.parameterType = SQL_LONGVARBINARY
+        match (value) {
+            case Some(v) =>
+                var arr: Array<Byte> = Array<Byte>(1, repeat: 0)
+                var list: ArrayList<Byte> = ArrayList<Byte>()
+                var length: Int64 = 0
+                while (true) {
+                    var date: Int64 = v.read(arr)
+                    if (date == 0) {
+                        break
+                    }
+                    list.add(arr[0])
+                    length++
+                }
+                unsafe {
+                    var cp: CPointerHandle<Byte> = acquireArrayRawData<Byte>(list.toArray())
+                    info.parameterValuePtr = CPointer<Unit>(cp.pointer)
+                    info.cptrHand = cp
+                }
+                var columnSize = max(length, 1)
+                unsafe { strLenOrInd.write(length) }
+                info.bufferLength = columnSize
+                info.strLenOrInd = strLenOrInd
+                info.isArrary = true
+            case None =>
+                unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+                info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setBool(value: Option<Bool>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_STINYINT
+        info.parameterType = SQL_TINYINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Byte>(unsafe { malloc(LEN_MALLOC_1) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Bool = value.getOrThrow()
+            if (realValue) {
+                unsafe { parameterValuePtr.write(1) }
+            } else {
+                unsafe { parameterValuePtr.write(0) }
+            }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setInt8(value: Option<Int8>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_STINYINT
+        info.parameterType = SQL_TINYINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int8>(unsafe { malloc(LEN_MALLOC_1) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int8 = value ?? 0
+            unsafe { parameterValuePtr.write(realValue) }
+
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    @OverflowWrapping
+    private func setUInt8(value: Option<UInt8>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_STINYINT
+        info.parameterType = SQL_TINYINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int8>(unsafe { malloc(LEN_MALLOC_1) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int8 = Int8(value ?? 0)
+            unsafe { parameterValuePtr.write(realValue) }
+
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setInt16(value: Option<Int16>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_SSHORT
+        info.parameterType = SQL_SMALLINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int16>(unsafe { malloc(LEN_MALLOC_2) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int16 = value ?? 0
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    @OverflowWrapping
+    private func setUInt16(value: Option<UInt16>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_SSHORT
+        info.parameterType = SQL_SMALLINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int16>(unsafe { malloc(LEN_MALLOC_2) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int16 = Int16(value ?? 0)
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setInt32(value: Option<Int32>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_SLONG
+        info.parameterType = SQL_INTEGER
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int32>(unsafe { malloc(LEN_MALLOC_4) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int32 = value ?? 0
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    @OverflowWrapping
+    private func setUInt32(value: Option<UInt32>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_SLONG
+        info.parameterType = SQL_INTEGER
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int32>(unsafe { malloc(LEN_MALLOC_4) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int32 = Int32(value ?? 0)
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setInt64(value: Option<Int64>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_SBIGINT
+        info.parameterType = SQL_BIGINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int64 = value ?? 0
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    @OverflowWrapping
+    private func setUInt64(value: Option<UInt64>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_SBIGINT
+        info.parameterType = SQL_BIGINT
+        if (value != None) {
+            var parameterValuePtr = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Int64 = Int64(value ?? 0)
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setFloat32(value: Option<Float32>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_FLOAT
+        info.parameterType = SQL_REAL
+        if (value != None) {
+            var parameterValuePtr = CPointer<Float32>(unsafe { malloc(LEN_MALLOC_4) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Float32 = value ?? 0.0
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setFloat64(value: Option<Float64>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_DOUBLE
+        info.parameterType = SQL_DOUBLE
+        if (value != None) {
+            var parameterValuePtr = CPointer<Float64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: Float64 = value ?? 0.0
+            unsafe { parameterValuePtr.write(realValue) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setDate(value: Option<OdbcTypeDate>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_TYPE_DATE
+        info.parameterType = SQL_TYPE_DATE
+        match (value) {
+            case Some(v) =>
+                var parameterValuePtr = CPointer<DATE_STRUCT>(unsafe { malloc(LEN_MALLOC_6) })
+                if (parameterValuePtr.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
+                let realValue: DateTime = v.value
+                var date = DATE_STRUCT()
+                date.year = Int16(realValue.year)
+                date.month = Int16(realValue.month.toInteger())
+                date.day = Int16(realValue.dayOfMonth)
+
+                unsafe { parameterValuePtr.write(date) }
+                info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            case None =>
+                var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+                if (strLenOrInd.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
+                unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+                info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setTime(value: Option<OdbcTypeTime>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_TYPE_TIME
+        info.parameterType = SQL_TYPE_TIME
+        match (value) {
+            case Some(v) =>
+                var parameterValuePtr = CPointer<TIME_STRUCT>(unsafe { malloc(LEN_MALLOC_6) })
+                if (parameterValuePtr.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
+                let realValue: DateTime = v.value
+                var time = TIME_STRUCT()
+                time.hour = Int16(realValue.hour)
+                time.minute = Int16(realValue.minute)
+                time.second = Int16(realValue.second)
+                unsafe { parameterValuePtr.write(time) }
+                info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            case None =>
+                var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+                if (strLenOrInd.isNull()) {
+                    throw SqlException("Native malloc Failed.")
+                }
+                unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+                info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setTimestampWithoutTz(value: Option<DateTime>): ParamInfo {
+        var info = ParamInfo()
+        info.valueType = SQL_C_TYPE_TIMESTAMP
+        info.parameterType = SQL_TYPE_TIMESTAMP
+        if (value != None) {
+            var parameterValuePtr = CPointer<TIMESTAMP_STRUCT>(unsafe { malloc(LEN_MALLOC_16) })
+            if (parameterValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            let realValue: DateTime = value.getOrThrow()
+            var timestamp = TIMESTAMP_STRUCT()
+            timestamp.year = Int16(realValue.year)
+            timestamp.month = Int16(realValue.month.toInteger())
+            timestamp.day = Int16(realValue.dayOfMonth)
+            timestamp.hour = Int16(realValue.hour)
+            timestamp.minute = Int16(realValue.minute)
+            timestamp.second = Int16(realValue.second)
+            timestamp.fraction = UInt32(realValue.nanosecond)
+            unsafe { parameterValuePtr.write(timestamp) }
+            info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+        } else {
+            var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    private func setDecimal(value: Option<Decimal>, sqlType: Int16): ParamInfo {
+        var info = ParamInfo()
+        var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
+        if (strLenOrInd.isNull()) {
+            throw SqlException("Native malloc Failed.")
+        }
+        info.valueType = SQL_C_CHAR
+        info.parameterType = sqlType
+        if (value != None) {
+            let realValue: String = (value ?? Decimal(0)).toString()
+            var cstr = unsafe { LibC.mallocCString(realValue) }
+            var bufferLength = cstr.size()
+            var parameterValuePtr = CPointer<Unit>(cstr.getChars())
+            unsafe { strLenOrInd.write(Int64(SQL_NTS)) }
+
+            info.parameterValuePtr = parameterValuePtr
+            info.bufferLength = bufferLength
+            info.strLenOrInd = strLenOrInd
+            info.isString = true
+            info.cstring = cstr
+        } else {
+            unsafe { strLenOrInd.write(SQL_NULL_DATA) }
+            info.strLenOrInd = strLenOrInd
+        }
+        return info
+    }
+
+    public override func close(): Unit {
+        if (isClosed()) {
+            return
+        }
+        closed.store(true)
+        unsafe {
+            SQLCloseCursor(this.STMT_handlePtr)
+            SQLFreeHandle(SQL_HANDLE_STMT, this.STMT_handlePtr)
+        }
+    }
+
+    public override func isClosed(): Bool {
+        return closed.load()
+    }
+
+    public func getStmtHandle(): CPointer<Unit> {
+        unsafe { return this.STMT_handlePtr }
+    }
+
+    private func checkResource() {
+        if (isClosed()) {
+            throw SqlException("The Statement has been closed")
+        }
+    }
+    
+    private func getOldParamInfo(params: Array<SqlDbType>): Array<ParamInfo> {
         var paramInfo = Array<ParamInfo>(params.size, repeat: ParamInfo())
         for (i in 0..params.size) {
             match (params[i]) {
-                case v: SqlChar => paramInfo[i] = setString(v.value, SQL_CHAR)
-                case v: SqlNullableChar => paramInfo[i] = setString(v.value, SQL_CHAR)
-                case v: SqlVarchar => paramInfo[i] = setString(v.value, SQL_VARCHAR)
-                case v: SqlNullableVarchar => paramInfo[i] = setString(v.value, SQL_VARCHAR)
-                case v: SqlBinary => paramInfo[i] = setBytes(v.value, SQL_BINARY)
-                case v: SqlNullableBinary => paramInfo[i] = setBytes(v.value, SQL_BINARY)
-                case v: SqlVarBinary => paramInfo[i] = setBytes(v.value, SQL_VARBINARY)
-                case v: SqlNullableVarBinary => paramInfo[i] = setBytes(v.value, SQL_VARBINARY)
-                case v: SqlClob => paramInfo[i] = setClob(v.value)
-                case v: SqlNullableClob => paramInfo[i] = setClob(v.value)
-                case v: SqlBlob => paramInfo[i] = setBlob(v.value)
-                case v: SqlNullableBlob => paramInfo[i] = setBlob(v.value)
-                case v: SqlBool => paramInfo[i] = setBool(v.value)
-                case v: SqlNullableBool => paramInfo[i] = setBool(v.value)
-                case v: SqlByte => paramInfo[i] = setInt8(v.value)
-                case v: SqlNullableByte => paramInfo[i] = setInt8(v.value)
-                case v: SqlSmallInt => paramInfo[i] = setInt16(v.value)
-                case v: SqlNullableSmallInt => paramInfo[i] = setInt16(v.value)
-                case v: SqlInteger => paramInfo[i] = setInt32(v.value)
-                case v: SqlNullableInteger => paramInfo[i] = setInt32(v.value)
-                case v: SqlBigInt => paramInfo[i] = setInt64(v.value)
-                case v: SqlNullableBigInt => paramInfo[i] = setInt64(v.value)
-                case v: SqlReal => paramInfo[i] = setFloat32(v.value)
-                case v: SqlNullableReal => paramInfo[i] = setFloat32(v.value)
-                case v: SqlDouble => paramInfo[i] = setFloat64(v.value)
-                case v: SqlNullableDouble => paramInfo[i] = setFloat64(v.value)
-                case v: SqlDate => paramInfo[i] = setDate(v.value)
-                case v: SqlNullableDate => paramInfo[i] = setDate(v.value)
-                case v: SqlTime => paramInfo[i] = setTime(v.value)
-                case v: SqlNullableTime => paramInfo[i] = setTime(v.value)
-                case v: SqlTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
-                case v: SqlNullableTimestampWithoutTz => paramInfo[i] = setTimestampWithoutTz(v.value)
-                case v: SqlDecimal => paramInfo[i] = setDecimal(v.value, SQL_VARCHAR)
-                case v: SqlNullableDecimal => paramInfo[i] = setDecimal(v.value, SQL_VARCHAR)
+                case v: SqlChar => paramInfo[i] = setOldString(v.value, SQL_CHAR)
+                case v: SqlNullableChar => paramInfo[i] = setOldString(v.value, SQL_CHAR)
+                case v: SqlVarchar => paramInfo[i] = setOldString(v.value, SQL_VARCHAR)
+                case v: SqlNullableVarchar => paramInfo[i] = setOldString(v.value, SQL_VARCHAR)
+                case v: SqlBinary => paramInfo[i] = setOldBytes(v.value, SQL_BINARY)
+                case v: SqlNullableBinary => paramInfo[i] = setOldBytes(v.value, SQL_BINARY)
+                case v: SqlVarBinary => paramInfo[i] = setOldBytes(v.value, SQL_VARBINARY)
+                case v: SqlNullableVarBinary => paramInfo[i] = setOldBytes(v.value, SQL_VARBINARY)
+                case v: SqlClob => paramInfo[i] = setOldClob(v.value)
+                case v: SqlNullableClob => paramInfo[i] = setOldClob(v.value)
+                case v: SqlBlob => paramInfo[i] = setOldBlob(v.value)
+                case v: SqlNullableBlob => paramInfo[i] = setOldBlob(v.value)
+                case v: SqlBool => paramInfo[i] = setOldBool(v.value)
+                case v: SqlNullableBool => paramInfo[i] = setOldBool(v.value)
+                case v: SqlByte => paramInfo[i] = setOldInt8(v.value)
+                case v: SqlNullableByte => paramInfo[i] = setOldInt8(v.value)
+                case v: SqlSmallInt => paramInfo[i] = setOldInt16(v.value)
+                case v: SqlNullableSmallInt => paramInfo[i] = setOldInt16(v.value)
+                case v: SqlInteger => paramInfo[i] = setOldInt32(v.value)
+                case v: SqlNullableInteger => paramInfo[i] = setOldInt32(v.value)
+                case v: SqlBigInt => paramInfo[i] = setOldInt64(v.value)
+                case v: SqlNullableBigInt => paramInfo[i] = setOldInt64(v.value)
+                case v: SqlReal => paramInfo[i] = setOldFloat32(v.value)
+                case v: SqlNullableReal => paramInfo[i] = setOldFloat32(v.value)
+                case v: SqlDouble => paramInfo[i] = setOldFloat64(v.value)
+                case v: SqlNullableDouble => paramInfo[i] = setOldFloat64(v.value)
+                case v: SqlDate => paramInfo[i] = setOldDate(v.value)
+                case v: SqlNullableDate => paramInfo[i] = setOldDate(v.value)
+                case v: SqlTime => paramInfo[i] = setOldTime(v.value)
+                case v: SqlNullableTime => paramInfo[i] = setOldTime(v.value)
+                case v: SqlTimestampWithoutTz => paramInfo[i] = setOldTimestampWithoutTz(v.value)
+                case v: SqlNullableTimestampWithoutTz => paramInfo[i] = setOldTimestampWithoutTz(v.value)
+                case v: SqlDecimal => paramInfo[i] = setOldDecimal(v.value, SQL_VARCHAR)
+                case v: SqlNullableDecimal => paramInfo[i] = setOldDecimal(v.value, SQL_VARCHAR)
                 case _ => throw SqlException("Unsupported data type.")
             }
         }
@@ -245,7 +1210,7 @@ public class OdbcStatement <: Statement {
         return paramInfo
     }
 
-    private func generateUpdateResult(): OdbcUpdateResult {
+    private func generateOldUpdateResult(): OdbcUpdateResult {
         var updateResult: OdbcUpdateResult
         var rowCountPtr = LibC.malloc<Int64>()
         if (rowCountPtr.isNull()) {
@@ -264,7 +1229,7 @@ public class OdbcStatement <: Statement {
         return updateResult
     }
 
-    private func getSqlTypeName(dataType: Int16, nullable: Int16): String {
+    private func getOldSqlTypeName(dataType: Int16, nullable: Int16): String {
         var typeName: String
         if (dataType == SQL_CHAR) {
             if (nullable == SQL_NO_NULLS) {
@@ -369,7 +1334,7 @@ public class OdbcStatement <: Statement {
         return typeName
     }
 
-    private func generateQueryResult(): OdbcQueryResult {
+    private func generateOldQueryResult(): OdbcQueryResult {
         var queryResult: OdbcQueryResult
         var columnCountPtr = unsafe { LibC.malloc<Int16>() }
         if (columnCountPtr.isNull()) {
@@ -441,7 +1406,7 @@ public class OdbcStatement <: Statement {
                             var dataType = dataTypePtr.read()
                             var nullable: Int16
                             nullable = nullablePtr.read()
-                            typeName = getSqlTypeName(dataType, nullable)
+                            typeName = getOldSqlTypeName(dataType, nullable)
                             var odbcColumnInfo = OdbcColumnInfo(columnName.toString(), typeName, columnSizePtr.read(),
                                                                 decimalDigitsPtr.read(), 0, nullable)
                             arrOdbcColumnInfo[Int64(i)] = odbcColumnInfo
@@ -480,7 +1445,7 @@ public class OdbcStatement <: Statement {
         return queryResult
     }
 
-    private func setString(value: Option<String>, sqlType: Int16): ParamInfo {
+    private func setOldString(value: Option<String>, sqlType: Int16): ParamInfo {
         var info = ParamInfo()
         var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (strLenOrInd.isNull()) {
@@ -510,7 +1475,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setBytes(value: Option<Array<Byte>>, sqlType: Int16): ParamInfo {
+    private func setOldBytes(value: Option<Array<Byte>>, sqlType: Int16): ParamInfo {
         var info = ParamInfo()
         var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (strLenOrInd.isNull()) {
@@ -542,7 +1507,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setClob(value: Option<InputStream>): ParamInfo {
+    private func setOldClob(value: Option<InputStream>): ParamInfo {
         var info = ParamInfo()
         var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (strLenOrInd.isNull()) {
@@ -584,7 +1549,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setBlob(value: Option<InputStream>): ParamInfo {
+    private func setOldBlob(value: Option<InputStream>): ParamInfo {
         var info = ParamInfo()
         var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (strLenOrInd.isNull()) {
@@ -625,7 +1590,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setBool(value: Option<Bool>): ParamInfo {
+    private func setOldBool(value: Option<Bool>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_STINYINT
@@ -657,7 +1622,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setInt8(value: Option<Int8>): ParamInfo {
+    private func setOldInt8(value: Option<Int8>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_STINYINT
@@ -684,7 +1649,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setInt16(value: Option<Int16>): ParamInfo {
+    private func setOldInt16(value: Option<Int16>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_SSHORT
@@ -710,7 +1675,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setInt32(value: Option<Int32>): ParamInfo {
+    private func setOldInt32(value: Option<Int32>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_SLONG
@@ -736,7 +1701,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setInt64(value: Option<Int64>): ParamInfo {
+    private func setOldInt64(value: Option<Int64>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_SBIGINT
@@ -762,7 +1727,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setFloat32(value: Option<Float32>): ParamInfo {
+    private func setOldFloat32(value: Option<Float32>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_FLOAT
@@ -788,7 +1753,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setFloat64(value: Option<Float64>): ParamInfo {
+    private func setOldFloat64(value: Option<Float64>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_DOUBLE
@@ -814,7 +1779,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setDate(value: Option<DateTime>): ParamInfo {
+    private func setOldDate(value: Option<DateTime>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_TYPE_DATE
@@ -845,7 +1810,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setTime(value: Option<DateTime>): ParamInfo {
+    private func setOldTime(value: Option<DateTime>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_TYPE_TIME
@@ -875,7 +1840,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setTimestampWithoutTz(value: Option<DateTime>): ParamInfo {
+    private func setOldTimestampWithoutTz(value: Option<DateTime>): ParamInfo {
         var info = ParamInfo()
 
         info.valueType = SQL_C_TYPE_TIMESTAMP
@@ -909,7 +1874,7 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    private func setDecimal(value: Option<Decimal>, sqlType: Int16): ParamInfo {
+    private func setOldDecimal(value: Option<Decimal>, sqlType: Int16): ParamInfo {
         var info = ParamInfo()
         var strLenOrInd = CPointer<Int64>(unsafe { malloc(LEN_MALLOC_8) })
         if (strLenOrInd.isNull()) {
@@ -937,24 +1902,5 @@ public class OdbcStatement <: Statement {
         }
 
         return info
-    }
-
-    public override func close(): Unit {
-        if (isClosed()) {
-            return
-        }
-        closed.store(true)
-        unsafe {
-            SQLCloseCursor(this.STMT_handlePtr)
-            SQLFreeHandle(SQL_HANDLE_STMT, this.STMT_handlePtr)
-        }
-    }
-
-    public override func isClosed(): Bool {
-        return closed.load()
-    }
-
-    public func getStmtHandle(): CPointer<Unit> {
-        unsafe { return this.STMT_handlePtr }
     }
 }

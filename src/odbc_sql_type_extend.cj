@@ -5,6 +5,7 @@
 package odbc4cj
 
 // 时间戳，无 TIME ZONE
+@Deprecated
 public class SqlTimestampWithoutTz <: SqlDbType {
     private var v: DateTime
 
@@ -33,6 +34,7 @@ public class SqlTimestampWithoutTz <: SqlDbType {
 }
 
 // 时间戳，无 TIME ZONE
+@Deprecated
 public class SqlNullableTimestampWithoutTz <: SqlNullableDbType {
     private var v: ?DateTime
 

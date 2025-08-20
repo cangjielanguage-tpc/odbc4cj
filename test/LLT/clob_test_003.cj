@@ -1,8 +1,7 @@
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
 
-
-import std.database.sql.* 
+import std.database.sql.*
 import std.io.*
 import std.time.*
 import std.regex.*
@@ -33,32 +32,27 @@ public class OdbcTest {
         @Assert(0, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("insert into test_llt values(?,?)")
         var str = ByteBuffer(20)
-        str.write("12345678".toArray())
-        rowCount = prepareStatement.update([SqlClob(str), SqlNullableClob(None)])
+        let arr1 = "12345678".toArray()
+        str.write(arr1)
+        prepareStatement.set<ByteBuffer>(0, str)
+        prepareStatement.set<Option<InputStream>>(1, Option<InputStream>.None)
+        // prepareStatement.setNull(1)
+        rowCount = prepareStatement.update()
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt")
         var queryResult = prepareStatement.query()
-        var arr: Array<SqlDbType> = [SqlClob(str), SqlNullableClob(None)]
-        queryResult.next(arr)
+        let a = queryResult.next()
+        @Assert(true, a)
         @Assert("SqlClob", queryResult.columnInfos[0].typeName)
-        match (arr[0]) {
-            case v: SqlClob =>
-                var a = Array<UInt8>("12345678".toArray().size, repeat: 0)
-                v.value.read(a)
-                @Assert("12345678".toArray().toString(), a.toString())
-            case _ => @Assert("abc", "123")
-        }
-        @Assert("SqlNullableClob", queryResult.columnInfos[1].typeName)
-        match (arr[1]) {
-            case v: SqlNullableClob =>
-                match(v.value) {
-                    case Some(v) =>
-                        var a = Array<UInt8>(1, repeat: 0)
-                        v.read(a)
-                        @Assert(None<Array<UInt8>>, a)
-                    case None => @Assert(None<String>, None<String>)
-                }
-            case _ => @Assert("abc", "123")
+        @Assert("SqlClob", queryResult.columnInfos[1].typeName)
+        let inputStream: InputStream = queryResult.get<InputStream>(0)
+        var arr = Array<UInt8>(arr1.size, repeat: 0)
+        inputStream.read(arr)
+        @Assert(arr1, arr)
+        let inputStream1: ?InputStream = queryResult.getOrNull<InputStream>(1)
+        match (inputStream1) {
+            case Some(v) => @Assert(0, 1)
+            case None => @Assert(1, 1)
         }
         queryResult.close()
     }
