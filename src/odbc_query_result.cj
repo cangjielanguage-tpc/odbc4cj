@@ -72,7 +72,7 @@ public class OdbcQueryResult <: QueryResult {
      * 异常 Exception - 传入参数错误
      */
     public override func get<T>(index: Int): T {
-        return getOrNull<T>(index) ?? throw NoneValueException()
+        return getOrNull<T>(index) ?? throw SqlException("data is null")
     }
 
     /*
@@ -85,9 +85,12 @@ public class OdbcQueryResult <: QueryResult {
     public override func getOrNull<T>(index: Int): ?T {
         checkResource()
         if (index < 0) {
-            throw IllegalArgumentException("Index must be greater than or equal to 0")
+            throw SqlException("Index must be greater than or equal to 0")
         }
-        return (resultSet[index] as ?T) ?? throw IllegalStateException()
+        if (index > resultCount.size) {
+            throw SqlException("parameter index error")
+        }
+        return (resultSet[index] as ?T) ?? throw SqlException("data type error")
     }
 
     /**
