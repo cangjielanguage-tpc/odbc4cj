@@ -188,9 +188,11 @@ public class OdbcStatement <: Statement {
     public override func set<T>(index: Int, value: T): Unit {
         checkResource()
         let parameterColumnInfosNew: Array<ColumnInfo> = parameterColumnInfos.clone()
-        // parameterColumnInfosNew.add(all:parameterColumnInfos)
         if (index < 0) {
             throw IllegalArgumentException("The parameter index must be greater than 0")
+        }
+        if (index > parameterColumnInfosNew.size - 1) {
+            throw SqlException("parameter index error")
         }
         if (this.params.isNone()) {
             this.params = Array<Any>(parameterColumnInfosNew.size, repeat: Option<Any>.None)
