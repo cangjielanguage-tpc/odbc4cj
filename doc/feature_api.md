@@ -203,7 +203,7 @@ public class OdbcStatement <: Statement {
      *
      * 参数 index - 位置
      * 参数 value - 值
-     * 异常 Exception - 参数设置错误。
+     * 异常 SqlException - 参数设置错误。
      */
     public override func set<T>(index: Int, value: T): Unit
 
@@ -211,7 +211,7 @@ public class OdbcStatement <: Statement {
      * 设置预执行sql语句null参数 - 暂不支持
      *
      * 参数 index - 位置
-     * 异常 Exception - 参数设置错误。
+     * 异常 SqlException - 参数设置错误。
      */
     public override func setNull(index: Int): Unit
 
@@ -219,20 +219,20 @@ public class OdbcStatement <: Statement {
      * 执行sql语句，得到更新结果
      *
      * 返回值 UpdateResult - 更新结果。
-     * 异常 Exception - 传入参数错误。
+     * 异常 SqlException - 传入参数错误。
      */
-    public override func update(): MysqlUpdateResult
+    public override func update(): OdbcUpdateResult
 
     /**
      * 执行sql语句，得到查询结果
      *
      * 返回值 QueryResult - 查询结果。
-     * 异常 Exception - 传入参数错误。
+     * 异常 SqlException - 传入参数错误。
      */
-    public override func query(): MysqlQueryResult
+    public override func query(): OdbcQueryResult
 
     /*
-    * 执行 sql 语句，得到更新结果
+    * 执行 sql 语句，得到更新结果 - 已废弃
     *
     * 参数 - params SqlDbType数组
     *
@@ -242,14 +242,14 @@ public class OdbcStatement <: Statement {
     public func update(params: Array<SqlDbType>): OdbcUpdateResult
 
     /*
-    * 执行 sql 语句，得到查询结果
+    * 执行 sql 语句，得到查询结果 - 已废弃
     *
     * 参数 - params SqlDbType数组
     *
     * 返回值 - QueryResult
     */
     @Deprecated
-    public func query(params: Array<SqlDbType>): QueryResult
+    public func query(params: Array<SqlDbType>): OdbcQueryResult
 
     /*
     * 获取语句句柄
@@ -335,7 +335,7 @@ public class OdbcQueryResult <: QueryResult {
      * 向后移动一行，必须先调用一次 next() 才能移动到第一行，第二次调用移动到第二行，依此类推。当返回 true 时，驱动会在结果集的当前行填入数据，当返回 false 时结束，且不会修改结果集当前行的内容。
      *
      * 返回值 Bool - 存在下一行则返回true，否则返回false
-     * 异常 Exception - 传入参数错误
+     * 异常 SqlException - 传入参数错误
      */
     public override func next(): Bool
 
@@ -344,7 +344,7 @@ public class OdbcQueryResult <: QueryResult {
      *
      * 参数 index - 位置
      * 返回值 ?T - 值
-     * 异常 Exception - 传入参数错误
+     * 异常 SqlException - 传入参数错误
      */
     public override func getOrNull<T>(index: Int): ?T
 
@@ -353,12 +353,12 @@ public class OdbcQueryResult <: QueryResult {
      *
      * 参数 index - 位置
      * 返回值 T - 值
-     * 异常 Exception - 传入参数错误
+     * 异常 SqlException - 传入参数错误
      */
     public override func get<T>(index: Int): T
 
     /*
-    * 向后移动一行，必须先调用一次 next 才能移动到第一行，第二次调用移动到第二行，依此类推
+    * 向后移动一行，必须先调用一次 next 才能移动到第一行，第二次调用移动到第二行，依此类推  - 已废弃
     *
     * 参数 - values SqlDbType数组
     *
