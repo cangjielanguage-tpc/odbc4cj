@@ -39,7 +39,7 @@ public class OdbcQueryResult <: QueryResult {
         var res = unsafe { SQLFetch(STMT_handle) }
         if (res == SQL_NO_DATA) {
             return false
-        } else {
+        } else if (res == 0) {
             for (i in 0..resultCount.size) {
                 match (resultCount[i].typeName) {
                     case "SqlString" => resultSet[i] = getString(i)
@@ -60,8 +60,10 @@ public class OdbcQueryResult <: QueryResult {
                     case _ => throw SqlException("Unsupported data type.")
                 }
             }
+            return true
+        } else {
+            return false
         }
-        return true
     }
 
     /*
@@ -153,13 +155,14 @@ public class OdbcQueryResult <: QueryResult {
         return true
     }
 
+    @OverflowSaturating
     private func readVarColumn(index: Int64, ctype: Int16): DataBuffer {
         var cbNullTerminator = 1
         if (ctype == SQL_BINARY || ctype == SQL_VARBINARY || ctype == SQL_LONGVARBINARY) {
             cbNullTerminator = 0
         }
 
-        var cbAllocated = resultCount[index].displaySize
+        var cbAllocated = resultCount[index].displaySize * 3
         var cbUsed = 0
         var pb: CPointer<Unit> = CPointer<Unit>(LibC.malloc<Int8>(count: cbAllocated))
         if (pb.isNull()) {
