@@ -12,3 +12,8 @@ test_temp
 test/log
 test/tmp
 test/report
+output/
+log.txt
+0-odbc4cj.gcda
+0-odbc4cj.gcno
+
