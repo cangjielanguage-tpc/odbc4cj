@@ -1,10 +1,7 @@
-/*
- * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
- */
- 
 package odbc4cj
 
 public class OdbcTransaction <: Transaction {
+    private let nativeApi: OdbcNativeApi
     private var DBC_handlePtr: CPointer<Unit>
     public var level: TransactionIsoLevel = Unspecified
     public var myAccessMode: TransactionAccessMode = ReadWrite
@@ -16,20 +13,17 @@ public class OdbcTransaction <: Transaction {
     public mut override prop isoLevel: TransactionIsoLevel {
         get() {
             var infoValue: UInt32
-            unsafe {
-                var infoValuePtr = malloc(LEN_MALLOC_4)
-                if (infoValuePtr.isNull()) {
-                    throw SqlException("Native malloc Failed.")
-                }
-                var ret = SQLGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Unit>())
-                if (!SQLSucceeded(ret)) {
-                    var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                    free(infoValuePtr)
-                    throw exception
-                }
-                infoValue = CPointer<UInt32>(infoValuePtr).read()
-                free(infoValuePtr)
+            var infoValuePtr = nativeApi.malloc(LEN_MALLOC_4)
+            if (infoValuePtr.isNull()) {
+                throw SqlException("Native malloc Failed.")
             }
+            var ret = nativeApi.sqlGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Int16>())
+            if (!SQLSucceeded(ret)) {
+                nativeApi.free(infoValuePtr)
+                throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            }
+            infoValue = unsafe { CPointer<UInt32>(infoValuePtr).read() }
+            nativeApi.free(infoValuePtr)
 
             if (infoValue == SQL_TXN_READ_UNCOMMITTED) {
                 level = ReadUncommitted
@@ -44,7 +38,6 @@ public class OdbcTransaction <: Transaction {
             }
             level
         }
-
         set(value) {
             if (odbcConnection.isClosed()) {
                 throw SqlException("The database connection has been closed")
@@ -58,15 +51,13 @@ public class OdbcTransaction <: Transaction {
                 case Unspecified => valuePtr = Int64(SQL_TXN_READ_COMMITTED)
                 case _ => throw SqlException(" ${value} mode not supported.")
             }
-            var ret0 = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT) }
+            var ret0 = nativeApi.sqlEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT)
             if (!SQLSucceeded(ret0)) {
-                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                throw exception
+                throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             }
-            var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER) }
+            var ret = nativeApi.sqlSetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, valuePtr, SQL_IS_UINTEGER)
             if (!SQLSucceeded(ret)) {
-                var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-                throw exception
+                throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             }
 
             level = value
@@ -80,9 +71,23 @@ public class OdbcTransaction <: Transaction {
         get() {
             myAccessMode
         }
-
         set(value) {
-            myAccessMode = value
+            if (odbcConnection.isClosed()) {
+                throw SqlException("The database connection has been closed")
+            }
+            if (value != myAccessMode) {
+                let valuePtr = match (value) {
+                    case ReadWrite => SQL_MODE_READ_WRITE
+                    case ReadOnly => SQL_MODE_READ_ONLY
+                    case Unspecified => SQL_MODE_READ_WRITE
+                    case _ => throw UnsupportedException()
+                }
+                var ret = nativeApi.sqlSetConnectAttr(DBC_handlePtr, SQL_ATTR_ACCESS_MODE, valuePtr, SQL_IS_UINTEGER)
+                if (!SQLSucceeded(ret)) {
+                    throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+                }
+                myAccessMode = value
+            }
         }
     }
 
@@ -91,15 +96,15 @@ public class OdbcTransaction <: Transaction {
      */
     public mut override prop deferrableMode: TransactionDeferrableMode {
         get() {
-            myDeferrableMode
+            throw UnsupportedException()
         }
-
-        set(value) {
-            myDeferrableMode = value
+        set(_) {
+            throw UnsupportedException()
         }
     }
 
-    init(DBC_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
+    init(nativeApi: OdbcNativeApi, DBC_handlePtr: CPointer<Unit>, odbcConnection: OdbcConnection) {
+        this.nativeApi = nativeApi
         if (odbcConnection.isClosed()) {
             throw SqlException("The database connection has been closed")
         }
@@ -117,10 +122,9 @@ public class OdbcTransaction <: Transaction {
             throw SqlException("The database connection has been closed")
         }
         /* Set autocommit attribute */
-        var ret = unsafe { SQLSetConnectAttr(DBC_handlePtr, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER) }
+        var ret = nativeApi.sqlSetConnectAttr(DBC_handlePtr, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER)
         if (!SQLSucceeded(ret)) {
-            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-            throw exception
+            throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
         }
     }
 
@@ -133,11 +137,12 @@ public class OdbcTransaction <: Transaction {
         if (odbcConnection.isClosed()) {
             throw SqlException("The database connection has been closed")
         }
-        var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT) }
+        var ret = nativeApi.sqlEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_COMMIT)
         if (!SQLSucceeded(ret)) {
-            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-            throw exception
+             throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
         }
+        //恢复AUTOCOMMIT - 事务结束回到自动提交模式
+        nativeApi.sqlSetConnectAttr(DBC_handlePtr, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_ON, SQL_IS_UINTEGER)
     }
 
     /*
@@ -149,11 +154,12 @@ public class OdbcTransaction <: Transaction {
         if (odbcConnection.isClosed()) {
             throw SqlException("The database connection has been closed")
         }
-        var ret = unsafe { SQLEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_ROLLBACK) }
+        var ret = nativeApi.sqlEndTran(SQL_HANDLE_DBC, DBC_handlePtr, SQL_ROLLBACK)
         if (!SQLSucceeded(ret)) {
-            var exception = diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
-            throw exception
+             throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
         }
+        //恢复AUTOCOMMIT - 事务结束回到自动提交模式
+        nativeApi.sqlSetConnectAttr(DBC_handlePtr, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_ON, SQL_IS_UINTEGER)
     }
 
     /*
@@ -162,6 +168,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public override func save(savePointName: String): Unit {
+        throw UnsupportedException("ODBC does not support savepoints")
     }
 
     /*
@@ -170,6 +177,7 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public override func rollback(savePointName: String): Unit {
+        throw UnsupportedException("ODBC does not support savepoints")
     }
 
     /*
@@ -178,5 +186,6 @@ public class OdbcTransaction <: Transaction {
      * 异常 SqlException - 事务已提交或回滚或连接已断开。
      */
     public override func release(savePointName: String): Unit {
+        throw UnsupportedException("ODBC does not support savepoints")
     }
 }

@@ -1,21 +1,27 @@
-/*
- * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
- */
- 
 package odbc4cj
 
 // 自动注册驱动
-let _ = {
-     => DriverManager.register("odbc", OdbcDriver())
-}()
+let _ = DriverManager.register("odbc", OdbcDriver())
 
 public class OdbcDriver <: Driver {
+    private let nativeApi: OdbcNativeApi
+
     /*
      * 初始化驱动
      *
      * 异常 SqlException - 内存不足导致初始化失败
      */
     public init() {
+        this.nativeApi = RealOdbcNativeApi()
+    }
+
+    /*
+     * 初始化驱动(测试代码注入Mock使用)
+     *
+     * 异常 SqlException - 内存不足导致初始化失败
+     */
+    public init(nativeApi: OdbcNativeApi) {
+        this.nativeApi = nativeApi
     }
 
     /**
@@ -23,7 +29,7 @@ public class OdbcDriver <: Driver {
      */
     public override prop name: String {
         get() {
-            ""
+            "odbc"
         }
     }
 
@@ -32,7 +38,7 @@ public class OdbcDriver <: Driver {
      */
     public override prop version: String {
         get() {
-            ""
+            "v1.0.1"
         }
     }
 
@@ -43,7 +49,7 @@ public class OdbcDriver <: Driver {
      */
     public override prop preferredPooling: Bool {
         get() {
-            false
+            true
         }
     }
 
@@ -55,29 +61,66 @@ public class OdbcDriver <: Driver {
      *            2个选项，用来设置 sql 语句提交方式
      * 返回值 Datasource - 数据源实例
      */
-    public override func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource {
-        var dateBase = ""
-        var userName = ""
-        var pd = ""
-        var arr = connectionString.split(";")
-        if (arr.size != 3) {
-            throw SqlException("Url is error")
+    public override func open(connectionString: String, opts: Array<(String, String)>): Datasource {
+        let datasource = OdbcDatasource(nativeApi)
+        //解析并验证连接字符串
+        if (connectionString.size > 0) {
+            let fullConnStr = parseAndValidateConnectionString(connectionString)
+            datasource.setOption(SqlOption.URL, fullConnStr)
         }
-        for (i in 0..3) {
+        //opts 追加/覆盖选项
+        for ((k, v) in opts) {
+            datasource.setOption(k, v)
+        }
+
+        return PooledDatasource(datasource)
+    }
+
+    /**
+     * 解析并验证ODBC连接字符串
+     * 参数ConnectionString - ODBC连接字符串格式
+     * 返回值 String -完整连接字符串（未知扩展键保留原始大小写）
+     * 异常SqlException - 连接字符串格式错误或缺少必需键
+     */
+    private func parseAndValidateConnectionString(connectionString: String): String {
+        var connParts = HashMap<String, String>()
+        var arr = connectionString.split(";")
+        if (arr.size < 3) {
+            throw SqlException(
+                "Url is error: connection string must have at least 3 key-value pairs separated by ';', got ${arr.size}")
+        }
+        for (i in 0..arr.size) {
             var list = arr[i].split("=")
             if (list.size != 2) {
-                throw SqlException("Url is error")
+                throw SqlException("Url is error: invalid key-value pair ${arr[i]}, expected format KEY=Value")
             }
-            if (list[0] == "DATABASE") {
-                dateBase = list[1]
-            } else if (list[0] == "UID") {
-                userName = list[1]
-            } else if (list[0] == "PWD") {
-                pd = list[1]
+            let upperKey = list[0].toAsciiUpper()
+            if (upperKey == "DRIVER" || upperKey == "DSN" || upperKey == "SERVER" || upperKey == "SERVERNAME" ||
+                upperKey == "PORT" || upperKey == "DATABASE" || upperKey == "UID" || upperKey == "PWD") {
+                //标准ODBC键：转大写存储（ODBC标准键大小写不敏感）
+                connParts[upperKey] = list[1]
             } else {
-                throw SqlException("Url is error")
+                connParts[list[0]] = list[1]
+            }
+            //DATABASE/UID/PWD必须存在
+            if (!connParts.contains("DATABASE")) {
+                throw SqlException("Url is error: DATABASE is required in connection string")
+            }
+            if (!connParts.contains("UID")) {
+                throw SqlException("Url is error: UID is required in connection string")
+            }
+            if (!connParts.contains("PWD")) {
+                throw SqlException("Url is error: PWD is required in connection string")
             }
         }
-        return unsafe { OdbcDatasource(dateBase, userName, pd, opts) }
+        //构建完整连接字符串传递给OdbcDatasource(用于SQLDriverConnect)
+        var fullConnStr = ""
+        for ((k, v) in connParts) {
+            if (!fullConnStr.isEmpty()) {
+                fullConnStr = fullConnStr + ";"
+            }
+            fullConnStr = fullConnStr + "${k}=${v}"
+        }
+        return fullConnStr
     }
 }
