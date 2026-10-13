@@ -17,7 +17,7 @@ public class OdbcTest {
         var conn = database.connect()
         var ps = conn.prepareStatement("drop table if exists test")
 
-        ps.getStmtHandle()
+        (ps as OdbcStatement).getOrThrow().getStmtHandle()
         ps.isClosed()
         ps.close()
     }

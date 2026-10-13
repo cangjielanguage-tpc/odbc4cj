@@ -35,7 +35,7 @@ public class OdbcTest {
         rowCount = prepareStatement.update([SqlInteger(1), SqlVarchar("abc")])
         @Assert(1, rowCount.rowCount)
         prepareStatement = conn.prepareStatement("select * from test_llt where id = ?")
-        var queryResult = prepareStatement.query(SqlInteger(1))
+        var queryResult = prepareStatement.query([SqlInteger(1)])
         var arr: Array<SqlDbType> = [SqlInteger(3), SqlVarchar("1")]
         queryResult.next(arr)
         println(queryResult.columnInfos[0].typeName)

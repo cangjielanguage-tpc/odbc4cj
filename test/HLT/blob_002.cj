@@ -207,9 +207,9 @@ let arr1: Array<UInt8> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 
 @Test
 public class blob_002 {
-    var conn: OdbcConnection
-    var prepareStatement: OdbcStatement
-    var rowCount: OdbcUpdateResult
+    var conn: Connection
+    var prepareStatement: Statement
+    var rowCount: UpdateResult
 
     init() {
         var driver = OdbcDriver()

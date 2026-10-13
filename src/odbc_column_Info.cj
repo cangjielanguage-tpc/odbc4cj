@@ -1,7 +1,3 @@
-/*
- * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
- */
- 
 package odbc4cj
 
 public class OdbcColumnInfo <: ColumnInfo {
@@ -11,6 +7,8 @@ public class OdbcColumnInfo <: ColumnInfo {
     private var lLength: Int64
     private var lScale: Int64
     private var lNullable: Bool
+    // 原始 ODBC SQL 类型码，供旧版 SqlDbType API 兼容使用
+    public var rawSqlType: Int16 = 0
 
     public init() {
         lName = ""
@@ -82,5 +80,10 @@ public class OdbcColumnInfo <: ColumnInfo {
         get() {
             lNullable
         }
+    }
+
+    // 供旧版 SqlDbType API（next(values)）更新类型名称
+    public func updateTypeName(name: String): Unit {
+        lTypeName = name
     }
 }

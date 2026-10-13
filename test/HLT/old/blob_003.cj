@@ -8,9 +8,9 @@ import odbc4cj.*
 
 @Test
 public class blob_003 {
-    var conn: OdbcConnection
-    var prepareStatement: OdbcStatement
-    var rowCount: OdbcUpdateResult
+    var conn: Connection
+    var prepareStatement: Statement
+    var rowCount: UpdateResult
     init(){
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")

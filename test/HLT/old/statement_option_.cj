@@ -18,7 +18,7 @@ public class OdbcTest {
         var conn = database.connect()
         var prepareStatement = conn.prepareStatement("drop table if exists test")
         try {
-            prepareStatement.setOption(0, 0)
+            (prepareStatement as OdbcStatement).getOrThrow().setOption(0, 0)
         } catch (e: SqlException) {
             @Assert("errorCode: 0", e.message)
         }
