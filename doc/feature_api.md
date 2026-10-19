@@ -4,28 +4,6 @@
 
 基于 odbc 实现 database 包。
 
-## odbc
-
-前置条件：NA
-
-场景：
-
-约束：
-
-```
-1. 不支持数据类型（SqlTimeTz、SqlTimestamp、SqlInterval），新增支持数据类型请参考 sqlTypeExtend.cj
-2. interface Driver 不支持 name、version、preferredPooling
-3. Datasource 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
-4. interface Connection 不支持 getMetaData()，请使用 getInfo(infoType: UInt16, len: Int16)
-5. interface Statement 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
-6. interface UpdateResult 不支持 lastInsertId
-7. interface Transaction 不支持 accessMode、deferrableMode、save(savePointName: String)、rollback(savepointName: String)、release(savePointName: String)
-```
-
-性能：NA
-
-可靠性：NA
-
 ### 1  数据库驱动接口
 
 #### 1.1 特性介绍
