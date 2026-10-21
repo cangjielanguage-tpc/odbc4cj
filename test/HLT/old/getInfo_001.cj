@@ -17,9 +17,9 @@ public class OdbcTest {
     }
     @TestCase
     public func test001(): Unit {
-        var driver = OdbcDriver()
-        var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
-        var conn = database.connect()
+        var database = OdbcDatasource()
+        database.setOption(SqlOption.URL, "DATABASE=mysql;UID=root;PWD=123")
+        var conn = (database.connect() as OdbcConnection).getOrThrow()
         var name = conn.getInfo(6, 200)
         @Assert(str, name)
         conn.getInfo(116, 2)

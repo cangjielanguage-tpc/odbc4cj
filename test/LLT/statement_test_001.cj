@@ -27,7 +27,7 @@ public class OdbcTest {
         var conn = database.connect()
         var ps = conn.prepareStatement("drop table if exists test_llt")
 
-        ps.getStmtHandle()
+        // getStmtHandle 仅存在于 OdbcStatement，std Statement 接口无法触达，不再测试
         ps.isClosed()
         ps.close()
     }

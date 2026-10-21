@@ -1,122 +1,70 @@
-/*
- * @Copyright (c) Huawei Technologies Co., Ltd. 2023-2024. All rights reserved.
- */
- 
 package odbc4cj
 
 public class OdbcDatasource <: Datasource {
-    private var dateBase: String
-    private var userName: String
-    private var password: String
-    private var opts: Array<(String, String)>
+    private let nativeApi: OdbcNativeApi
+    private var options: HashMap<String, String>
+    private let closed = AtomicBool(false)
+
+
     /*
      * 初始化数据源
      */
-    init(dateBase: String, userName: String, password: String, opts: Array<(String, String)>) {
-        this.dateBase = dateBase
-        this.userName = userName
-        this.password = password
-        this.opts = opts
+    public init(nativeApi: OdbcNativeApi) {
+        this.nativeApi = nativeApi
+        this.options = HashMap<String, String>()
     }
 
     /*
-     * 设置连接选项 (使用 setOption(key: Int32, value: Int64))
+     * 初始化数据源（内部创建原生 API，不经驱动池化包装，connect() 返回真实连接）
      */
-    public override func setOption(key: String, value: String): Unit {
+    public init() {
+        this.nativeApi = RealOdbcNativeApi()
+        this.options = HashMap<String, String>()
     }
 
     /*
      * 设置连接选项
+     * 参数 key - 选项键（如SqlOption.URL, SqlOption.USERname等）
+     * 参数 value - 键对应的值
+     */
+    public override func setOption(key: String, value: String): Unit {
+        checkResource()
+        options[key] = value
+    }
+
+    /*
+     * 设置连接选项（数值型选项，对齐 1.1.3 API）
      */
     public func setOption(key: Int32, value: Int64): Unit {
     }
 
     /*
      * 返回一个可用的连接
-     * 返回值 Connection - 数据库连接实例
+     * 返回值 OdbcConnection - 数据库连接实例
      */
     public override func connect(): OdbcConnection {
-        unsafe {
-            var ENV_handlePtr: CPointer<CPointer<Unit>> = LibC.malloc<CPointer<Unit>>()
-            if (ENV_handlePtr.isNull()) {
-                throw SqlException("Native malloc Failed.")
-            }
-            let nullHandle = CPointer<Unit>()
-            var ret0 = unsafe { SQLAllocHandle(SQL_HANDLE_ENV, nullHandle, ENV_handlePtr) }
-            if (!SQLSucceeded(ret0)) {
-                throw SqlException("Can't initialize module odbc. SQLAllocEnv failed.")
-            }
-            /* Set version attribute */
-            if (ENV_handlePtr.isNull()) {
-                throw SqlException("Native malloc Failed.")
-            }
-            let ENV_handlePtrRead = ENV_handlePtr.read()
-            if (ENV_handlePtrRead.isNull()) {
-                throw SqlException("Native malloc Failed.")
-            }
-            ret0 = unsafe { SQLSetEnvAttr(ENV_handlePtrRead, SQL_ATTR_ODBC_VERSION, SQL_OV_ODBC3, SQL_IS_INTEGER) }
-            if (!SQLSucceeded(ret0)) {
-                throw SqlException("Unable to set SQL_ATTR_ODBC_VERSION attribute.")
-            }
-            if (ENV_handlePtr.isNull()) {
-                throw SqlException("Native malloc Failed.")
-            }
-            var ENV_handle: CPointer<Unit> = ENV_handlePtr.read()
-            
-            if (ENV_handle.isNull()) {
-                throw SqlException("Native malloc Failed.")
-            }
-
-            var DBC_handlePtr = CPointer<CPointer<Unit>>()
-            var ret: Int16
-            DBC_handlePtr = LibC.malloc<CPointer<Unit>>()
-            if (DBC_handlePtr.isNull()) {
-                LibC.free<CPointer<Unit>>(ENV_handlePtr)
-                throw SqlException("Native malloc Failed.")
-            }
-            var res = unsafe { SQLAllocHandle(SQL_HANDLE_DBC, ENV_handle, DBC_handlePtr) }
-            if (!SQLSucceeded(res)) {
-                var exception = diagnoseException(SQL_HANDLE_ENV, ENV_handle)
-                unsafe { SQLFreeHandle(SQL_HANDLE_ENV, ENV_handle) }
-                throw exception
-            }
-            if (DBC_handlePtr.isNull()) {
-                LibC.free<CPointer<Unit>>(ENV_handlePtr)
-                throw SqlException("Native malloc Failed.")
-            }
-            let DBC_handle = DBC_handlePtr.read()
-            if (DBC_handle.isNull()) {
-                LibC.free<CPointer<Unit>>(ENV_handlePtr)
-                throw SqlException("Native malloc Failed.")
-            }
-            for (i in 0..opts.size) {
-                if (opts[i][0] == "SQL_ATTR_AUTOCOMMIT") {
-                    if (opts[i][1] == "SQL_AUTOCOMMIT_OFF") {
-                        /* Set autocommit attribute */
-                        ret = unsafe { SQLSetConnectAttr(DBC_handle, SQL_ATTR_AUTOCOMMIT, SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER) }
-                        if (!SQLSucceeded(ret)) {
-                            unsafe { diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr.read()) }
-                        }
-                    } else if (opts[i][1] != "SQL_AUTOCOMMIT_ON") {
-                        throw SqlException("SQL_ATTR_AUTOCOMMIT value must be SQL_AUTOCOMMIT_OFF or SQL_AUTOCOMMIT_ON")
-                    }
-                } else {
-                    throw SqlException("Only supported SQL_ATTR_AUTOCOMMIT.")
-                }
-            }
-            if (DBC_handle.isNull()) {
-                LibC.free<CPointer<Unit>>(ENV_handlePtr)
-                throw SqlException("Native malloc Failed.")
-            }
-            var conn =  OdbcConnection(DBC_handle, dateBase, userName, password) 
-            return conn
-        }
+        checkResource()
+        return OdbcConnection(nativeApi, options)
     }
 
+    /*
+     * 关闭数据源
+     */
     public override func close(): Unit {
+        closed.store(true)
     }
 
+    /*
+     * 判断数据源是否已关闭
+     * 返回值 Boolean - true表示已关闭，false表示未关闭
+     */
     public override func isClosed(): Bool {
-        return false
+        closed.load()
+    }
+
+    private func checkResource(): Unit {
+        if (isClosed()) {
+            throw SqlException("The datasource has been closed.")
+        }
     }
 }

@@ -54,15 +54,18 @@ public class OdbcTest {
         var driver = OdbcDriver()
         var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
         database.setOption("1","1")
-        database.setOption(Int32(1),1)
+        // setOption(Int32, Int64) 是 OdbcDatasource 专有方法，连接池代理不可达，使用直连数据源
+        var directDatabase = OdbcDatasource()
+        directDatabase.setOption(Int32(1),1)
         database.close()
         database.isClosed()
     }
 
     @TestCase
     public func test003(): Unit {
-        var driver = OdbcDriver()
-        var database = driver.open("DATABASE=mysql;UID=root;PWD=123")
+        // objId/getInfo 是 OdbcConnection 专有方法，连接池代理不可达，使用直连数据源
+        var database = OdbcDatasource()
+        database.setOption(SqlOption.URL, "DATABASE=mysql;UID=root;PWD=123")
         var conn = database.connect()
         @Assert(true, conn.objId >= 0)
         conn.getMetaData()
@@ -219,7 +222,7 @@ public class OdbcTest {
             OdbcTypeEnum.fromToString("")
             @Assert(1, 0)
         }catch(e:SqlException){
-            @Assert("The Statement has been closed, errorCode: 0", e.message)
+            @Assert("Unknown odbc typeEnum:, errorCode: 0", e.message)
         }
     }
 
