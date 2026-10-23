@@ -24,7 +24,7 @@ public class OdbcDatasource <: Datasource {
 
     /*
      * 设置连接选项
-     * 参数 key - 选项键（如SqlOption.URL, SqlOption.USERname等）
+     * 参数 key - 选项键（如SqlOption.URL, SqlOption.Username等）
      * 参数 value - 键对应的值
      */
     public override func setOption(key: String, value: String): Unit {

@@ -2,6 +2,8 @@ package odbc4cj
 
 import std.io.*
 
+// SQL 语句对象：持有原生语句句柄与参数绑定缓冲
+// 注意：本类非线程安全，请不要在多个线程间共享同一个 Statement 实例
 public class OdbcStatement <: Statement {
     private let nativeApi: OdbcNativeApi
     private var STMT_handlePtr: CPointer<Unit>
@@ -71,11 +73,15 @@ public class OdbcStatement <: Statement {
                             CPointer<Int16>(dataTypePtr), CPointer<UInt64>(parameterSizePtr),
                             CPointer<Int16>(decimalDigitsPtr), CPointer<Int16>(nullablePtr))
                         if (SQLSucceeded(ret)) {
-                            let typeName = getSqlTypeName(CPointer<Int16>(dataTypePtr).read())
+                            let dataType = CPointer<Int16>(dataTypePtr).read()
+                            let typeName = getSqlTypeName(dataType)
                             let colSize = CPointer<UInt64>(parameterSizePtr).read()
                             let decimalDigits = CPointer<Int16>(decimalDigitsPtr).read()
                             let nullable = CPointer<Int16>(nullablePtr).read()
-                            arrInfo[Int64(i)] = OdbcColumnInfo("", typeName, Int64(colSize), decimalDigits, 0, nullable)
+                            let info = OdbcColumnInfo("", typeName, Int64(colSize), decimalDigits, 0, nullable)
+                            // 记录原始 ODBC 类型码，NULL 绑定按 rawSqlType 分发，不依赖类型名字符串
+                            info.rawSqlType = dataType
+                            arrInfo[Int64(i)] = info
                         } else {
                             arrInfo[Int64(i)] = OdbcColumnInfo("", "SqlString", 4000, 0, 0, SQL_NULLABLE_UNKNOWN)
                             hadToUseFallback = true
@@ -86,6 +92,8 @@ public class OdbcStatement <: Statement {
                         nativeApi.free(nullablePtr)
                     }
                 }
+                // 参数描述完成后恢复语句超时为驱动默认(0)，避免为描述参数临时设置的 5 秒超时持续影响后续 query()/update()
+                nativeApi.sqlSetStmtAttr(this.STMT_handlePtr, SQL_ATTR_QUERY_TIMEOUT, Int64(0), SQL_IS_INTEGER)
                 if (hadToUseFallback) {
                     paramInfoFetchFailed = true
                 }
@@ -152,6 +160,9 @@ public class OdbcStatement <: Statement {
             }
         }
         match (value) {
+            // 裸 Float16/Rune 与 ?Float16/?Rune 是不同类型，必须分别拦截，否则裸值会落入兜底分支延迟失败
+            case v: Float16 => throw SqlException("Unsupported data type: Float16 is not supported, use setNull instead for NULL.")
+            case v: Rune => throw SqlException("Unsupported data type: Rune is not supported, use setNull instead for NULL.")
             case v: ?Bool => unwrap(v)
             case v: ?Int8 => unwrap(v)
             case v: ?UInt8 => unwrap(v)
@@ -161,10 +172,10 @@ public class OdbcStatement <: Statement {
             case v: ?UInt32 => unwrap(v)
             case v: ?Int64 => unwrap(v)
             case v: ?UInt64 => unwrap(v)
-            case v: ?Float16 => unwrap(v)
+            case v: ?Float16 => throw SqlException("Unsupported data type: Float16 is not supported, use setNull instead for NULL.")
             case v: ?Float32 => unwrap(v)
             case v: ?Float64 => unwrap(v)
-            case v: ?Rune => unwrap(v)
+            case v: ?Rune => throw SqlException("Unsupported data type: Rune is not supported, use setNull instead for NULL.")
             case v: ?String => unwrap(v)
             case v: ?DateTime => unwrap(v)
             case v: ?BigInt => unwrap(v)
@@ -196,7 +207,7 @@ public class OdbcStatement <: Statement {
         if (index >= params.getOrThrow().size) {
             throw SqlException("parameter index error")
         }
-        let colInfo = parameterColumnInfos[index]
+        let colInfo = (parameterColumnInfos[index] as OdbcColumnInfo).getOrThrow()
         var paramInfo = ParamInfo()
         var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
         if (strLenOrInd.isNull()) {
@@ -205,20 +216,20 @@ public class OdbcStatement <: Statement {
         unsafe { strLenOrInd.write(SQL_NULL_DATA) }
         paramInfo.strLenOrInd = strLenOrInd
 
-        let (vt, pt) = match (colInfo.typeName) {
-            case "TINYINT" | "SqlInt8" => (SQL_C_STINYINT, SQL_TINYINT)
-            case "SMALLINT" | "SqlInt16" => (SQL_C_SSHORT, SQL_SMALLINT)
-            case "INTEGER" | "SqlInt32" => (SQL_C_SLONG, SQL_INTEGER)
-            case "BIGINT" | "SqlInt64" => (SQL_C_SBIGINT, SQL_BIGINT)
-            case "REAL" | "FLOAT" | "SqlFloat" | "SqlFloat32" => (SQL_C_FLOAT, SQL_FLOAT)
-            case "DOUBLE" | "SqlDouble" | "SqlFloat64" => (SQL_C_DOUBLE, SQL_DOUBLE)
-            case "VARCHAR" | "CHAR" | "CLOB" | "DECIMAL" | "SqlString" | "SqlNumeric" | "SqlClob" | "SqlDecimal" =>
-                (SQL_C_CHAR, SQL_VARCHAR)
-            case "VARBINARY" | "BINARY" | "BLOB" | "SqlBytes" | "SqlArrayByte" | "SqlInputStream" =>
-                (SQL_C_BINARY, SQL_VARBINARY)
-            case "DATE" | "SqlDate" | "SqlOdbcTypeDate" => (SQL_C_TYPE_DATE, SQL_TYPE_DATE)
-            case "TIME" | "SqlTime" | "SqlOdbcTypeTime" => (SQL_C_TYPE_TIME, SQL_TYPE_TIME)
-            case "TIMESTAMP" | "SqlTimestamp" | "SqlOdbcTypeTimeTimestamp" => (SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP)
+        // 按原始 ODBC 类型码选择 NULL 绑定类型，不依赖驱动返回的类型名字符串；
+        // NULL 不传输数据，C 类型仅作提示；未映射类型走默认 (SQL_C_CHAR, SQL_VARCHAR)
+        let (vt, pt) = match (colInfo.rawSqlType) {
+            case -6 => (SQL_C_STINYINT, SQL_TINYINT) // SQL_TINYINT
+            case 5 => (SQL_C_SSHORT, SQL_SMALLINT) // SQL_SMALLINT
+            case 4 => (SQL_C_SLONG, SQL_INTEGER) // SQL_INTEGER
+            case -5 => (if (odbcConnection.isGaussDB) { SQL_C_UBIGINT } else { SQL_C_SBIGINT }, SQL_BIGINT) // SQL_BIGINT
+            case 7 => (SQL_C_FLOAT, SQL_FLOAT) // SQL_REAL
+            case 6 | 8 => (SQL_C_DOUBLE, SQL_DOUBLE) // SQL_FLOAT| SQL_DOUBLE
+            case 1 | 12 | -8 | -9 | -1 | -10 | 3 | 2 => (SQL_C_CHAR, SQL_VARCHAR) // 字符/宽字符/LOB/DECIMAL
+            case -2 | -3 | -4 => (SQL_C_BINARY, SQL_VARBINARY) // 二进制
+            case 91 => (SQL_C_TYPE_DATE, SQL_TYPE_DATE)
+            case 92 => (SQL_C_TYPE_TIME, SQL_TYPE_TIME)
+            case 93 => (SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP)
             case _ => (SQL_C_CHAR, SQL_VARCHAR)
         }
         paramInfo.valueType = vt
@@ -563,6 +574,21 @@ public class OdbcStatement <: Statement {
                                 CPointer<Int64>(columnSizePtr).read(), CPointer<Int16>(decimalDigitsPtr).read(), 0,
                                 nullable)
                             odbcColumnInfo.rawSqlType = dataType
+                            // 查询列是否无符号（SQL_DESC_UNSIGNED），读取侧据此路由到 UInt 通道，避免有符号读取溢出；
+                            // 查询失败保守视为有符号，不拖垮 describe 主流程
+                            var unsignedAttrPtr = nativeApi.malloc(LEN_MALLOC_8)
+                            if (!unsignedAttrPtr.isNull()) {
+                                var attrStrLenPtr = nativeApi.malloc(LEN_MALLOC_2)
+                                if (!attrStrLenPtr.isNull()) {
+                                    var attrRet = nativeApi.sqlColAttribute(STMT_handlePtr, columnNumber, SQL_DESC_UNSIGNED,
+                                        CPointer<Unit>(), Int16(0), CPointer<Int16>(attrStrLenPtr), CPointer<Int64>(unsignedAttrPtr))
+                                    if (SQLSucceeded(attrRet) && unsafe { CPointer<Int64>(unsignedAttrPtr).read() } != 0) {
+                                        odbcColumnInfo.isUnsigned = true
+                                    }
+                                    nativeApi.free(attrStrLenPtr)
+                                }
+                                nativeApi.free(unsignedAttrPtr)
+                            }
                             arrOdbcColumnInfo[Int64(i)] = odbcColumnInfo
                         } else {
                             unsafe { LibC.free<UInt8>(columnNamePtr) }
@@ -606,21 +632,20 @@ public class OdbcStatement <: Statement {
         unsafe { strLenOrInd.write(SQL_NULL_DATA) }
         info.strLenOrInd = strLenOrInd
 
-        let (vt, pt) = match (colInfo.typeName) {
-            case "TINYINT" | "SqlInt8" => (SQL_C_TINYINT, SQL_TINYINT)
-            case "SMALLINT" | "SqlInt16" => (SQL_C_SHORT, SQL_SMALLINT)
-            case "INTEGER" | "SqlInt32" => (SQL_C_LONG, SQL_INTEGER)
-            case "BIGINT" | "SqlInt64" =>
-                (if (odbcConnection.isGaussDB) { SQL_C_UBIGINT } else { SQL_C_SBIGINT }, SQL_BIGINT)
-            case "REAL" | "FLOAT" | "SqlFloat" | "SqlFloat32" => (SQL_C_FLOAT, SQL_FLOAT)
-            case "DOUBLE" | "SqlDouble" | "SqlFloat64" => (SQL_C_DOUBLE, SQL_DOUBLE)
-            case "VARCHAR" | "CHAR" | "CLOB" | "DECIMAL" | "SqlString" | "SqlNumeric" | "SqlClob" | "SqlDecimal" =>
-                (SQL_C_CHAR, SQL_VARCHAR)
-            case "VARBINARY" | "BINARY" | "BLOB" | "SqlBytes" | "SqlArrayByte" | "SqlInputStream" =>
-                (SQL_C_BINARY, SQL_VARBINARY)
-            case "DATE" | "SqlDate" | "SqlOdbcTypeDate" => (SQL_C_TYPE_DATE, SQL_TYPE_DATE)
-            case "TIME" | "SqlTime" | "SqlOdbcTypeTime" => (SQL_C_TYPE_TIME, SQL_TYPE_TIME)
-            case "TIMESTAMP" | "SqlTimestamp" | "SqlOdbcTypeTimeTimestamp" => (SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP)
+        // 按原始 ODBC 类型码选择 NULL 绑定类型，不依赖驱动返回的类型名字符串（与 setNull 保持一致）
+        let rawSqlType = (colInfo as OdbcColumnInfo).getOrThrow().rawSqlType
+        let (vt, pt) = match (rawSqlType) {
+            case -6 => (SQL_C_STINYINT, SQL_TINYINT) // SQL_TINYINT
+            case 5 => (SQL_C_SSHORT, SQL_SMALLINT) // SQL_SMALLINT
+            case 4 => (SQL_C_SLONG, SQL_INTEGER) // SQL_INTEGER
+            case -5 => (if (odbcConnection.isGaussDB) { SQL_C_UBIGINT } else { SQL_C_SBIGINT }, SQL_BIGINT) // SQL_BIGINT
+            case 7 => (SQL_C_FLOAT, SQL_FLOAT) // SQL_REAL
+            case 6 | 8 => (SQL_C_DOUBLE, SQL_DOUBLE) // SQL_FLOAT| SQL_DOUBLE
+            case 1 | 12 | -8 | -9 | -1 | -10 | 3 | 2 => (SQL_C_CHAR, SQL_VARCHAR) // 字符/宽字符/LOB/DECIMAL
+            case -2 | -3 | -4 => (SQL_C_BINARY, SQL_VARBINARY) // 二进制
+            case 91 => (SQL_C_TYPE_DATE, SQL_TYPE_DATE)
+            case 92 => (SQL_C_TYPE_TIME, SQL_TYPE_TIME)
+            case 93 => (SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP)
             case _ => (SQL_C_CHAR, SQL_VARCHAR)
         }
         info.valueType = vt
@@ -674,7 +699,7 @@ public class OdbcStatement <: Statement {
             info.bufferLength = bufferLength
             info.strLenOrInd = strLenOrInd
             info.isArrary = true
-            info.cptrHand = cptrHandle
+            info.cptrHand = Some(cptrHandle)
         } else {
             unsafe { strLenOrInd.write(SQL_NULL_DATA) }
             info.strLenOrInd = strLenOrInd
@@ -692,27 +717,31 @@ public class OdbcStatement <: Statement {
         info.parameterType = SQL_LONGVARCHAR
         match (value) {
             case Some(v) =>
-                var arr: Array<Byte> = Array<Byte>(1, repeat: 0)
+                // 批量读流：4096 字节缓冲，避免逐字节 read 调用
+                var buf: Array<Byte> = Array<Byte>(READ_CHUNK_SIZE, repeat: 0)
                 var list: ArrayList<Byte> = ArrayList<Byte>()
                 var length: Int64 = 0
                 while (true) {
-                    var date: Int64 = v.read(arr)
-                    if (date == 0) {
+                    var n: Int64 = v.read(buf)
+                    if (n == 0) {
                         break
                     }
-                    list.add(arr[0])
-                    length++
+                    for (i in 0..n) {
+                        list.add(buf[i])
+                    }
+                    length += n
                 }
                 unsafe {
                     var cp: CPointerHandle<Byte> = acquireArrayRawData<Byte>(list.toArray())
                     info.parameterValuePtr = CPointer<Unit>(cp.pointer)
-                    info.cptrHand = cp
+                    info.cptrHand = Some(cp)
                 }
                 var columnSize = length
                 unsafe { strLenOrInd.write(length) }
                 info.bufferLength = columnSize
                 info.strLenOrInd = strLenOrInd
-                info.isString = true
+                // 数据缓冲挂在 cptrHand 上，用 isArrary 标记以便 freeParamInfo 正确释放
+                info.isArrary = true
             case None =>
                 unsafe { strLenOrInd.write(SQL_NULL_DATA) }
                 info.strLenOrInd = strLenOrInd
@@ -730,21 +759,24 @@ public class OdbcStatement <: Statement {
         info.parameterType = SQL_LONGVARBINARY
         match (value) {
             case Some(v) =>
-                var arr: Array<Byte> = Array<Byte>(1, repeat: 0)
+                // 批量读流：4096 字节缓冲，避免逐字节 read 调用
+                var buf: Array<Byte> = Array<Byte>(READ_CHUNK_SIZE, repeat: 0)
                 var list: ArrayList<Byte> = ArrayList<Byte>()
                 var length: Int64 = 0
                 while (true) {
-                    var date: Int64 = v.read(arr)
-                    if (date == 0) {
+                    var n: Int64 = v.read(buf)
+                    if (n == 0) {
                         break
                     }
-                    list.add(arr[0])
-                    length++
+                    for (i in 0..n) {
+                        list.add(buf[i])
+                    }
+                    length += n
                 }
                 unsafe {
                     var cp: CPointerHandle<Byte> = acquireArrayRawData<Byte>(list.toArray())
                     info.parameterValuePtr = CPointer<Unit>(cp.pointer)
-                    info.cptrHand = cp
+                    info.cptrHand = Some(cp)
                 }
                 var columnSize = max(length, 1)
                 unsafe { strLenOrInd.write(length) }
@@ -809,17 +841,17 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    @OverflowWrapping
     private func setUInt8(value: Option<UInt8>): ParamInfo {
         var info = ParamInfo()
-        info.valueType = SQL_C_TINYINT
+        // 无符号绑定 SQL_C_UTINYINT，避免 >127 的值经 Int8 转换后静默变负
+        info.valueType = SQL_C_UTINYINT
         info.parameterType = SQL_TINYINT
         if (value != None) {
-            var parameterValuePtr = CPointer<Int8>(nativeApi.malloc(LEN_MALLOC_1))
+            var parameterValuePtr = CPointer<UInt8>(nativeApi.malloc(LEN_MALLOC_1))
             if (parameterValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-            let realValue: Int8 = Int8(value ?? 0)
+            let realValue: UInt8 = value ?? 0
             unsafe { parameterValuePtr.write(realValue) }
 
             info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
@@ -892,19 +924,26 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    @OverflowWrapping
     private func setUInt16(value: Option<UInt16>): ParamInfo {
         var info = ParamInfo()
-        info.valueType = SQL_C_SHORT
+        // 无符号绑定 SQL_C_USHORT，避免超 Int16 范围的值静默回绕
+        info.valueType = SQL_C_USHORT
         info.parameterType = SQL_SMALLINT
         if (value != None) {
-            var parameterValuePtr = CPointer<Int16>(nativeApi.malloc(LEN_MALLOC_2))
+            var parameterValuePtr = CPointer<UInt16>(nativeApi.malloc(LEN_MALLOC_2))
             if (parameterValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-            let realValue: Int16 = Int16(value ?? 0)
+            let realValue: UInt16 = value ?? 0
             unsafe { parameterValuePtr.write(realValue) }
             info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            info.bufferLength = Int64(LEN_MALLOC_2)
+            var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(Int64(LEN_MALLOC_2)) }
+            info.strLenOrInd = strLenOrInd
         } else {
             var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
             if (strLenOrInd.isNull()) {
@@ -939,19 +978,26 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    @OverflowWrapping
     private func setUInt32(value: Option<UInt32>): ParamInfo {
         var info = ParamInfo()
-        info.valueType = SQL_C_LONG
+        // 无符号绑定 SQL_C_ULONG，避免超 Int32 范围的值静默回绕
+        info.valueType = SQL_C_ULONG
         info.parameterType = SQL_INTEGER
         if (value != None) {
-            var parameterValuePtr = CPointer<Int32>(nativeApi.malloc(LEN_MALLOC_4))
+            var parameterValuePtr = CPointer<UInt32>(nativeApi.malloc(LEN_MALLOC_4))
             if (parameterValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-            let realValue: Int32 = Int32(value ?? 0)
+            let realValue: UInt32 = value ?? 0
             unsafe { parameterValuePtr.write(realValue) }
             info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            info.bufferLength = Int64(LEN_MALLOC_4)
+            var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(Int64(LEN_MALLOC_4)) }
+            info.strLenOrInd = strLenOrInd
         } else {
             var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
             if (strLenOrInd.isNull()) {
@@ -987,20 +1033,26 @@ public class OdbcStatement <: Statement {
         return info
     }
 
-    @OverflowWrapping
     private func setUInt64(value: Option<UInt64>): ParamInfo {
         var info = ParamInfo()
-        // 高斯 zenith 驱动要求 SQL_C_UBIGINT，其他数据库使用标准 SQL_C_SBIGINT
-        info.valueType = if (odbcConnection.isGaussDB) { SQL_C_UBIGINT } else { SQL_C_SBIGINT }
+        // UInt64 按无符号绑定 SQL_C_UBIGINT（Gauss zenith 与标准驱动通用），避免超 Int64.Max 的值被静默回绕为负数
+        info.valueType = SQL_C_UBIGINT
         info.parameterType = SQL_BIGINT
         if (value != None) {
-            var parameterValuePtr = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
+            var parameterValuePtr = CPointer<UInt64>(nativeApi.malloc(LEN_MALLOC_8))
             if (parameterValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-            let realValue: Int64 = Int64(value ?? 0)
+            let realValue: UInt64 = value ?? 0
             unsafe { parameterValuePtr.write(realValue) }
             info.parameterValuePtr = CPointer<Unit>(parameterValuePtr)
+            info.bufferLength = Int64(LEN_MALLOC_8)
+            var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
+            if (strLenOrInd.isNull()) {
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { strLenOrInd.write(Int64(LEN_MALLOC_8)) }
+            info.strLenOrInd = strLenOrInd
         } else {
             var strLenOrInd = CPointer<Int64>(nativeApi.malloc(LEN_MALLOC_8))
             if (strLenOrInd.isNull()) {
@@ -1235,8 +1287,15 @@ public class OdbcStatement <: Statement {
                 if (!paramInfo[i].strLenOrInd.isNull()) {
                     nativeApi.free(CPointer<Unit>(paramInfo[i].strLenOrInd))
                 }
-                if (paramInfo[i].isArrary || paramInfo[i].isString) {
-                    releaseArrayRawData(paramInfo[i].cptrHand)
+                if (paramInfo[i].isArrary) {
+                    if (let Some(hand) <- paramInfo[i].cptrHand) {
+                        releaseArrayRawData(hand)
+                    }
+                } else if (paramInfo[i].isString) {
+                    // 字符串参数的数据缓冲来自 mallocCString，必须释放，否则每次执行都会泄漏
+                    if (!paramInfo[i].cstring.isNull()) {
+                        LibC.free(paramInfo[i].cstring)
+                    }
                 } else if (!paramInfo[i].parameterValuePtr.isNull()) {
                     nativeApi.free(paramInfo[i].parameterValuePtr)
                 }

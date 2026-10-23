@@ -1,5 +1,15 @@
 package odbc4cj
 
+// 包级真 realloc 包装：成员函数与 foreign 函数同名，类内直接调用会递归到自身
+func nativeRealloc(ptr: CPointer<Unit>, size: Int64): CPointer<Unit> {
+    unsafe { realloc(ptr, size) }
+}
+
+// 包级 memcpy 包装：成员函数与 foreign 函数同名，类内直接调用会递归到自身
+func nativeMemcpy(dst: CPointer<Byte>, src: CPointer<Unit>, size: UIntNative): CPointer<Unit> {
+    unsafe { memcpy(dst, src, size) }
+}
+
 public class RealOdbcNativeApi <: OdbcNativeApi {
     public func sqlAllocHandle(handleType: Int16, inputHandle: CPointer<Unit>, outputHandle: CPointer<CPointer<Unit>>): Int16 {
         unsafe { SQLAllocHandle(handleType, inputHandle, outputHandle) }
@@ -19,7 +29,7 @@ public class RealOdbcNativeApi <: OdbcNativeApi {
         unsafe { SQLDriverConnect(connectionHandle, windowHandle, inConnectionString,
             stringLength1, outConnectionString, bufferLength, stringLength2Ptr, driverCompletion) }
     }
-    public func sqlDisconnect(connectionHandle: CPointer<Unit>): Unit {
+    public func sqlDisconnect(connectionHandle: CPointer<Unit>): Int16 {
         unsafe { SQLDisconnect(connectionHandle) }
     }
 
@@ -31,6 +41,11 @@ public class RealOdbcNativeApi <: OdbcNativeApi {
 
     public func sqlSetConnectAttr(dbcHandle: CPointer<Unit>, attribute: Int32, value: Int64, stringLength: Int32): Int16 {
         unsafe { SQLSetConnectAttr(dbcHandle, attribute, value, stringLength) }
+    }
+
+    public func sqlGetConnectAttr(dbcHandle: CPointer<Unit>, attribute: Int32, valuePtr: CPointer<Unit>,
+        bufferLength: Int32, stringLengthPtr: CPointer<Int32>): Int16 {
+        unsafe { SQLGetConnectAttr(dbcHandle, attribute, valuePtr, bufferLength, stringLengthPtr) }
     }
 
     public func sqlEndTran(handleType: Int16, handle: CPointer<Unit>, completionType: Int16): Int16 {
@@ -80,6 +95,13 @@ public class RealOdbcNativeApi <: OdbcNativeApi {
             nameLengthPtr, dataTypePtr, columnSizePtr, decimalDigitsPtr, nullablePtr) }
     }
 
+    public func sqlColAttribute(stmtHandle: CPointer<Unit>, columnNumber: UInt16, fieldIdentifier: UInt16,
+                                characterAttributePtr: CPointer<Unit>, bufferLength: Int16, stringLengthPtr: CPointer<Int16>,
+                                numericAttributePtr: CPointer<Int64>): Int16 {
+        unsafe { SQLColAttribute(stmtHandle, columnNumber, fieldIdentifier, characterAttributePtr,
+            bufferLength, stringLengthPtr, numericAttributePtr) }
+    }
+
     public func sqlRowCount(stmtHandle: CPointer<Unit>, rowCountPtr: CPointer<Int64>): Int16 {
         unsafe { SQLRowCount(stmtHandle, rowCountPtr) }
     }
@@ -107,14 +129,23 @@ public class RealOdbcNativeApi <: OdbcNativeApi {
         unsafe { SQLGetInfo(dbcHandle, infoType, infoValuePtr, bufferLength, stringLengthPtr) }
     }
 
+    public func multiByteToWideChar(codePage: UInt32, flags: UInt32, multiByteStr: CPointer<UInt8>, multiByteLen: Int32,
+                                    wideCharStr: CPointer<UInt16>, wideCharLen: Int32): Int32 {
+        unsafe { MultiByteToWideChar(codePage, flags, multiByteStr, multiByteLen, wideCharStr, wideCharLen) }
+    }
+
     public func malloc(size: UIntNative): CPointer<Unit> {
         var p = unsafe{LibC.malloc<UInt8>(count:Int64(size))}
         CPointer<Unit>(p)
     }
 
     public func realloc(ptr: CPointer<Unit>, size: Int64): CPointer<Unit> {
-        var p = unsafe{LibC.malloc<UInt8>(count:size)}
-        CPointer<Unit>(p)
+        // 必须使用真正的 realloc：原地扩容并保留已读数据；此前误用 malloc 会导致分段读取丢失已读数据并泄漏旧缓冲
+        nativeRealloc(ptr, size)
+    }
+
+    public func memcpy(dst: CPointer<Byte>, src: CPointer<Unit>, size: UIntNative): CPointer<Unit> {
+        nativeMemcpy(dst, src, size)
     }
 
     public func free(ptr: CPointer<Unit>): Unit {

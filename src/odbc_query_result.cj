@@ -32,7 +32,7 @@ public class OdbcQueryResult <: QueryResult {
      * 向后移动一行，必须先调用一次 next() 才能移动到第一行，第二次调用移动到第二行，依此类推。当返回 true 时，驱动会在结果集的当前行填入数据，当返回 false 时结束，且不会修改结果集当前行的内容。
      *
      * 返回值 Bool - 存在下一行则返回true，否则返回false
-     * 异常 Exception - 传入参数错误
+     * 异常 SqlException - 传入参数错误，或取数失败（SQL_ERROR 等会抛出诊断异常而非静默返回 false）
      */
     public override func next(): Bool {
         checkResource()
@@ -43,39 +43,45 @@ public class OdbcQueryResult <: QueryResult {
         var res = nativeApi.sqlFetch(STMT_handle)
         if (res == SQL_NO_DATA) {
             return false
-        } else if (res == 0) {
+        } else if (SQLSucceeded(res)) {
             fillResultSet()
             return true
         } else {
-            return false
+            //取数失败必须抛出诊断异常，不能伪装成结果集结束静默丢行
+            throw nativeApi.diagnoseException(SQL_HANDLE_STMT, STMT_handle)
         }
     }
 
     private func fillResultSet(): Unit {
         for (i in 0..resultCount.size) {
-            match (resultCount[i].typeName) {
-                case "SqlString" => resultSet[i] = getString(i)
-                case "SqlArrayByte" => resultSet[i] = getBytes(i)
-                case "SqlInputStream" => resultSet[i] = getBlob(i)
-                case "SqlClob" => resultSet[i] = getClob(i)
-                case "SqlBool" => resultSet[i] = getBool(i)
-                case "SqlInt8" => resultSet[i] = getInt8(i)
-                case "SqlInt16" => resultSet[i] = getInt16(i)
-                case "SqlInt32" => resultSet[i] = getInt32(i)
-                case "SqlInt64" => resultSet[i] = getInt64(i)
-                case "SqlFloat32" => resultSet[i] = getFloat32(i)
-                case "SqlFloat64" => resultSet[i] = getFloat64(i)
-                case "SqlOdbcTypeDate" => resultSet[i] = match (getDate(i)) {
+            // 新版 next() 按原始 ODBC 类型码分发，不依赖 typeName：
+            // 旧版 next(values) 的契约行为会把 typeName 改写为旧版名，typeName 不能作为新版分发依据
+            match (resultCount[i].rawSqlType) {
+                case 1 | 12 | -8 | -9 => resultSet[i] = getString(i) // SQL_CHAR| SQL_VARCHAR| SQL_WCHAR| SQL_WVARCHAR
+                case -2 | -3 => resultSet[i] = getBytes(i) // SQL_BINARY| SQL_VARBINARY
+                case -1 | -10 => resultSet[i] = getClob(i) // SQL_LONGVARCHAR| SQL_WLONGVARCHAR
+                case -4 => resultSet[i] = getBlob(i) // SQL_LONGVARBINARY
+                case -7 => resultSet[i] = getBool(i) // SQL_BIT
+                // 无符号列（SQL_DESC_UNSIGNED）路由到 UInt 通道，避免有符号读取溢出（如 int unsigned 的 4294967295）
+                case -6 => resultSet[i] = if (resultCount[i].isUnsigned) { getUInt8(i) } else { getInt8(i) } // SQL_TINYINT
+                case 5 => resultSet[i] = if (resultCount[i].isUnsigned) { getUInt16(i) } else { getInt16(i) } // SQL_SMALLINT
+                case 4 => resultSet[i] = if (resultCount[i].isUnsigned) { getUInt32(i) } else { getInt32(i) } // SQL_INTEGER
+                case -5 => resultSet[i] = if (resultCount[i].isUnsigned) { getUInt64(i) } else { getInt64(i) } // SQL_BIGINT
+                case 7 => resultSet[i] = getFloat32(i) // SQL_REAL
+                case 6 | 8 => resultSet[i] = getFloat64(i) // SQL_FLOAT| SQL_DOUBLE
+                case 91 => resultSet[i] = match (getDate(i)) { // SQL_TYPE_DATE
                     case Some(t) => Some(OdbcTypeDate(t))
                     case None => Option<OdbcTypeDate>.None
                 }
-                case "SqlOdbcTypeTime" => resultSet[i] = match (getTime(i)) {
+                case 92 => resultSet[i] = match (getTime(i)) { // SQL_TYPE_TIME
                     case Some(t) => Some(OdbcTypeTime(t))
                     case None => Option<OdbcTypeTime>.None
                 }
-                case "SqlOdbcTypeTimeTimestamp" => resultSet[i] = getTimestampWithoutTz(i)
-                case "SqlDecimal" => resultSet[i] = getDecimal(i)
-                case _ => throw SqlException("Unsupported data type.")
+                case 93 => resultSet[i] = getTimestampWithoutTz(i) // SQL_TYPE_TIMESTAMP
+                case 3 | 2 => resultSet[i] = getDecimal(i) // SQL_DECIMAL| SQL_NUMERIC
+                case _ =>
+                    // 未映射的列类型（如 SQL_GUID/SQL_INTERVAL_*）不拖垮整行：该列以 NULL 占位，其余列正常读取
+                    resultSet[i] = Option<Any>.None
             }
         }
     }
@@ -98,8 +104,10 @@ public class OdbcQueryResult <: QueryResult {
         var res = nativeApi.sqlFetch(STMT_handle)
         if (res == SQL_NO_DATA) {
             return false
-        } else if (res == 0) {
+        } else if (SQLSucceeded(res)) {
             for (i in 0..values.size) {
+                // 旧版契约：next(values) 调用后 columnInfos 的 typeName 必须呈现为旧版名
+                // （用例断言依赖此行为），同时新版 next() 的分发已改按 rawSqlType，互不影响
                 let colInfo = resultCount[i]
                 let oldName = getOldTypeName(colInfo.rawSqlType, colInfo.nullable)
                 colInfo.updateTypeName(oldName)
@@ -144,7 +152,8 @@ public class OdbcQueryResult <: QueryResult {
             }
             return true
         } else {
-            return false
+            //取数失败必须抛出诊断异常，不能伪装成结果集结束静默丢行
+            throw nativeApi.diagnoseException(SQL_HANDLE_STMT, STMT_handle)
         }
     }
 
@@ -209,7 +218,14 @@ public class OdbcQueryResult <: QueryResult {
             cbNullTerminator = 0
         }
 
+        // 初始缓冲：列大小*3（UTF-8 最坏情况）；过小给默认值、过大截为上限，
+        // 防止驱动对无限制列（如 varchar(max)）报 0 或超大值导致负长度读取/巨量分配，超出部分由循环扩容兜底
         var cbAllocated = resultCount[index].displaySize * 3
+        if (cbAllocated < 4096) {
+            cbAllocated = 4096
+        } else if (cbAllocated > 16 * 1024 * 1024) {
+            cbAllocated = 16 * 1024 * 1024
+        }
         var cbUsed = 0
         var pb: CPointer<Unit> = nativeApi.malloc(UIntNative(cbAllocated))
         if (pb.isNull()) {
@@ -227,7 +243,8 @@ public class OdbcQueryResult <: QueryResult {
         do {
             var cbAvailable = cbAllocated - cbUsed
             unsafe { cbData.write(0) }
-            ret = nativeApi.sqlGetData(this.STMT_handle, UInt16(index + 1), ctype, unsafe { pb + cbUsed }, cbAllocated,
+            // 必须传入本轮真实剩余空间 cbAvailable 而非总容量 cbAllocated，否则多轮循环时驱动可越界写
+            ret = nativeApi.sqlGetData(this.STMT_handle, UInt16(index + 1), ctype, unsafe { pb + cbUsed }, cbAvailable,
                 cbData)
 
             if (!SQLSucceeded(ret) && ret != SQL_NO_DATA) {
@@ -312,11 +329,11 @@ public class OdbcQueryResult <: QueryResult {
         if (buffer.data.isNull()) {
             return None
         } else {
-            var colValuePtr = CPointer<Byte>(buffer.data)
+            // memcpy 批量拷贝，避免大字段逐字节 FFI 调用
             var arr = Array<Byte>(buffer.len, repeat: 0)
-            for (i in 0..buffer.len) {
-                arr[i] = unsafe { colValuePtr.read(i) }
-            }
+            let dst = unsafe { acquireArrayRawData(arr) }
+            unsafe { nativeApi.memcpy(dst.pointer, buffer.data, UIntNative(buffer.len)) }
+            unsafe { releaseArrayRawData(dst) }
             nativeApi.free(buffer.data)
             return Some(arr)
         }
@@ -327,12 +344,11 @@ public class OdbcQueryResult <: QueryResult {
         if (buffer.data.isNull()) {
             return None
         } else {
-            var colValuePtr = CPointer<Byte>(buffer.data)
+            // memcpy 批量拷贝，避免大字段逐字节 FFI 调用
             var arr = Array<Byte>(buffer.len, repeat: 0)
-            for (i in 0..buffer.len) {
-                arr[i] = unsafe { colValuePtr.read(i) }
-            }
-
+            let dst = unsafe { acquireArrayRawData(arr) }
+            unsafe { nativeApi.memcpy(dst.pointer, buffer.data, UIntNative(buffer.len)) }
+            unsafe { releaseArrayRawData(dst) }
             nativeApi.free(buffer.data)
             var stream = ByteBuffer()
             stream.write(arr)
@@ -345,11 +361,11 @@ public class OdbcQueryResult <: QueryResult {
         if (buffer.data.isNull()) {
             return None
         } else {
-            var colValuePtr = CPointer<Byte>(buffer.data)
+            // memcpy 批量拷贝，避免大字段逐字节 FFI 调用
             var arr = Array<Byte>(buffer.len, repeat: 0)
-            for (i in 0..buffer.len) {
-                arr[i] = unsafe { colValuePtr.read(i) }
-            }
+            let dst = unsafe { acquireArrayRawData(arr) }
+            unsafe { nativeApi.memcpy(dst.pointer, buffer.data, UIntNative(buffer.len)) }
+            unsafe { releaseArrayRawData(dst) }
             nativeApi.free(buffer.data)
             var stream = ByteBuffer()
             stream.write(arr)
@@ -500,7 +516,10 @@ public class OdbcQueryResult <: QueryResult {
             nativeApi.free(colValueUnitPtr)
             throw SqlException("Native malloc failed.")
         }
-        var ret = nativeApi.sqlGetData(this.STMT_handle, UInt16(index + 1), SQL_C_SBIGINT, colValueUnitPtr, colValueSize,
+        // 高斯 zenith 驱动要求以 SQL_C_UBIGINT 读取 BIGINT，其他数据库使用标准 SQL_C_SBIGINT；
+        // 两者位模式相同（8 字节），按位读入 Int64 缓冲对合法 BIGINT 值结果一致
+        var ctype = if (isGaussDB) { SQL_C_UBIGINT } else { SQL_C_SBIGINT }
+        var ret = nativeApi.sqlGetData(this.STMT_handle, UInt16(index + 1), ctype, colValueUnitPtr, colValueSize,
             sizePtr)
         if (!SQLSucceeded(ret)) {
             nativeApi.free(colValueUnitPtr)

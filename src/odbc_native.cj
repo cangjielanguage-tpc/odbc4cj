@@ -5,6 +5,7 @@ package odbc4cj
 foreign {
     func malloc(size: UIntNative): CPointer<Unit>
     func realloc(ptr: CPointer<Unit>, size: Int64): CPointer<Unit>
+    func memcpy(dst: CPointer<Byte>, src: CPointer<Unit>, size: UIntNative): CPointer<Unit>
     func free(ptr: CPointer<Unit>): Unit
 
     /* Driver.openDb */
@@ -27,6 +28,9 @@ foreign {
                        TextLength: CPointer<Int16>): Int16
     // 设置连接属性
     func SQLSetConnectAttr(DBC_handle: CPointer<Unit>, Attribute: Int32, Value: Int64, StringLength: Int32): Int16
+    // 获取连接属性
+    func SQLGetConnectAttr(DBC_handle: CPointer<Unit>, Attribute: Int32, Value: CPointer<Unit>, BufferLength: Int32,
+        StringLength: CPointer<Int32>): Int16
     // 提交或回滚事务
     func SQLEndTran(HandleType: Int16, Handle: CPointer<Unit>, CompletionType: Int16): Int16
     // 执行语句
@@ -52,6 +56,10 @@ foreign {
     func SQLDescribeCol(STMT_handle: CPointer<Unit>, ColumnNumber: UInt16, ColumnName: CString, BufferLength: Int16,
                         NameLengthPtr: CPointer<Int16>, DataTypePtr: CPointer<Int16>, ColumnSizePtr: CPointer<Int64>,
                         DecimalDigitsPtr: CPointer<Int16>, NullablePtr: CPointer<Int16>): Int16
+    // 返回结果集中列的描述符信息（如 SQL_DESC_UNSIGNED）
+    func SQLColAttribute(StatementHandle: CPointer<Unit>, ColumnNumber: UInt16, FieldIdentifier: UInt16,
+                         CharacterAttributePtr: CPointer<Unit>, BufferLength: Int16, StringLengthPtr: CPointer<Int16>,
+                         NumericAttributePtr: CPointer<Int64>): Int16
     // 返回受插入、更新或删除请求影响的行数
     func SQLRowCount(STMT_handle: CPointer<Unit>, RowCountPtr: CPointer<Int64>): Int16
     // 返回多个结果行
@@ -67,6 +75,9 @@ foreign {
     // 返回有关特定驱动程序和数据源的信息
     func SQLGetInfo(DBC_handle: CPointer<Unit>, InfoType: UInt16, InfoValuePtr: CPointer<Unit>, BufferLength: Int16,
                     StringLengthPtr: CPointer<Int16>): Int16
+    // 将本地代码页字符串映射为 UTF-16（kernel32，用于驱动 ANSI 信息编码自适应）
+    func MultiByteToWideChar(CodePage: UInt32, DWFlags: UInt32, MultiByteStr: CPointer<UInt8>, MultiByteLen: Int32,
+                             WideCharStr: CPointer<UInt16>, WideCharLen: Int32): Int32
     // 关闭与特定连接句柄关联的连接
     func SQLDisconnect(ConnectionHandle: CPointer<Unit>): Int16
 }

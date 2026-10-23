@@ -8,6 +8,7 @@ public open class OdbcConnection <: Connection {
     private var options: HashMap<String, String>
     // 缓存的数据库产品名（SQL_DBMS_NAME），查询一次后不再重复查询
     private var cachedDbmsName: ?String = None
+    private var cachedMetaData: ?Map<String, String> = None
     // connection 标识 ID 分配器（单调递增，保证唯一）
     private static let nextObjId = AtomicUInt64(1)
     // connection 标识 ID
@@ -259,10 +260,14 @@ public open class OdbcConnection <: Connection {
     }
 
     /**
-     * 返回连接到的数据源元数据 (不支持), 使用 getInfo 方法
+     * 返回连接到的数据源元数据，更多信息可使用 getInfo 方法
+     * 元数据在连接生命周期内不变，首次构建后缓存
      */
     public override func getMetaData(): Map<String, String> {
         checkResource()
+        if (let Some(meta) <- cachedMetaData) {
+            return meta
+        }
         var meta = HashMap<String, String>()
         meta["driver.name"] = getInfoString(SQL_DRIVER_NAME)
         meta["driver.version"] = getInfoString(SQL_DRIVER_VER)
@@ -270,6 +275,7 @@ public open class OdbcConnection <: Connection {
         meta["dbms.version"] = getInfoString(SQL_DBMS_VER)
         meta["server.name"] = getInfoString(SQL_SERVER_NAME)
         meta["data.source.name"] = getInfoString(SQL_DATA_SOURCE_NAME)
+        cachedMetaData = meta
         return meta
     }
 
@@ -290,18 +296,89 @@ public open class OdbcConnection <: Connection {
             return ""
         }
 
-        var ret = nativeApi.sqlGetInfo(DBC_handlePtr, infoType, CPointer<Unit>(infoValuePtr), bufferLen,
-            CPointer<Int16>())
-        if (!SQLSucceeded(ret)) {
+        var strLenPtr = CPointer<Int16>(nativeApi.malloc(LEN_MALLOC_2))
+        if (strLenPtr.isNull()) {
             unsafe { LibC.free(infoValuePtr) }
             return ""
         }
 
-        var result = CString(CPointer<UInt8>(infoValuePtr)).toString()
+        var ret = nativeApi.sqlGetInfo(DBC_handlePtr, infoType, CPointer<Unit>(infoValuePtr), bufferLen, strLenPtr)
+        if (!SQLSucceeded(ret)) {
+            unsafe { LibC.free(infoValuePtr) }
+            nativeApi.free(CPointer<Unit>(strLenPtr))
+            return ""
+        }
+
+        // 驱动返回所需总长度（不含终止符）超过缓冲时扩容重取，避免静默截断
+        var needed = unsafe { strLenPtr.read() }
+        if (needed >= bufferLen) {
+            unsafe { LibC.free(infoValuePtr) }
+            infoValuePtr = unsafe { LibC.malloc<UInt8>(count: Int64(needed) + 1) }
+            if (infoValuePtr.isNull()) {
+                nativeApi.free(CPointer<Unit>(strLenPtr))
+                return ""
+            }
+            ret = nativeApi.sqlGetInfo(DBC_handlePtr, infoType, CPointer<Unit>(infoValuePtr), needed + 1, strLenPtr)
+            if (!SQLSucceeded(ret)) {
+                unsafe { LibC.free(infoValuePtr) }
+                nativeApi.free(CPointer<Unit>(strLenPtr))
+                return ""
+            }
+        }
+
+        // 编码自适应：部分驱动 ANSI 接口返回 UTF-8，部分返回本地代码页（中文 Windows 为 GBK），
+        // 固定按 UTF-8 解析本地编码会抛 Invalid unicode scalar value。
+        // 先尝试 UTF-8（合法即无损），非法时经 kernel32 MultiByteToWideChar 按当前 ANSI 代码页转 UTF-16
+        var bytePtr = CPointer<UInt8>(infoValuePtr)
+        var len: Int64 = 0
+        while (unsafe { bytePtr.read(len) } != 0) {
+            len += 1
+        }
+
+        var byteArr = Array<UInt8>(len, repeat: 0)
+        for (j in 0..len) {
+            byteArr[j] = unsafe { bytePtr.read(j) }
+        }
+
+        var decoded: ?String = None
+        try {
+            decoded = Some(String.fromUtf8(byteArr))
+        } catch (e: IllegalArgumentException) {
+            var wlen = nativeApi.multiByteToWideChar(0 /*CP_ACP*/, 0, bytePtr, Int32(len), CPointer<UInt16>(), 0)
+            if (wlen > 0) {
+                var wbufPtr = nativeApi.malloc(UIntNative(wlen) * 2)
+                if (!wbufPtr.isNull()) {
+                    nativeApi.multiByteToWideChar(0 /*CP_ACP*/, 0, bytePtr, Int32(len), CPointer<UInt16>(wbufPtr), wlen)
+                    var unitPtr = CPointer<UInt16>(wbufPtr)
+                    var sb = StringBuilder()
+                    var k: Int64 = 0
+                    while (k < Int64(wlen)) {
+                        var unit = unsafe { unitPtr.read(k) }
+                        if (unit >= 0xD800 && unit <= 0xDBFF && k + 1 < Int64(wlen)) {
+                            var low = unsafe { unitPtr.read(k + 1) }
+                            if (low >= 0xDC00 && low <= 0xDFFF) {
+                                var cp: UInt32 = 0x10000 + ((UInt32(unit) - 0xD800) << 10) + (UInt32(low) - 0xDC00)
+                                sb.append(Rune(cp))
+                                k += 2
+                                continue
+                            }
+                        }
+                        sb.append(Rune(UInt32(unit)))
+                        k += 1
+                    }
+                    decoded = Some(sb.toString())
+                    nativeApi.free(wbufPtr)
+                }
+            }
+        }
 
         unsafe { LibC.free(infoValuePtr) }
+        nativeApi.free(CPointer<Unit>(strLenPtr))
 
-        return result
+        return match (decoded) {
+            case Some(s) => s
+            case None => ""
+        }
     }
 
     /**
@@ -382,7 +459,8 @@ public open class OdbcConnection <: Connection {
         ret = nativeApi.sqlPrepare(STMT_handlePtr1, csql, Int32(SQL_NTS))
         unsafe { LibC.free(csql) }
         if (!SQLSucceeded(ret)) {
-            var exception = nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+            // prepare 的错误诊断挂在语句句柄上，必须用 SQL_HANDLE_STMT 取，否则丢失真实错误信息
+            var exception = nativeApi.diagnoseException(SQL_HANDLE_STMT, STMT_handlePtr1)
             nativeApi.sqlFreeHandle(SQL_HANDLE_STMT, STMT_handlePtr1)
             throw exception
         }
@@ -407,9 +485,13 @@ public open class OdbcConnection <: Connection {
         if (isClosed()) {
             return
         }
+        // 先断连再置关闭状态：断连失败时连接仍存活且句柄有效，抛出真实诊断供调用方重试
+        var ret = nativeApi.sqlDisconnect(DBC_handlePtr)
+        if (!SQLSucceeded(ret)) {
+            throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
+        }
+        // 标记关闭必须先于句柄释放：释放后其他方法不得再访问句柄
         closed.store(true)
-        nativeApi.sqlDisconnect(DBC_handlePtr)
-
         nativeApi.sqlFreeHandle(SQL_HANDLE_DBC, DBC_handlePtr)
         nativeApi.sqlFreeHandle(SQL_HANDLE_ENV, ENV_handle)
     }

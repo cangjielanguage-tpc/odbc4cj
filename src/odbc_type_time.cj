@@ -6,9 +6,9 @@ package odbc4cj
 public class OdbcTypeTime{
     private var dateTime: DateTime
     /*
-     * 
+     * 构造时间值
      *
-     * 参数 inputStream - 
+     * 参数 dateTime - 包含时分秒的时间值
      */
     public init(dateTime: DateTime) {
         this.dateTime = dateTime

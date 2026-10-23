@@ -9,6 +9,8 @@ public class OdbcColumnInfo <: ColumnInfo {
     private var lNullable: Bool
     // 原始 ODBC SQL 类型码，供旧版 SqlDbType API 兼容使用
     public var rawSqlType: Int16 = 0
+    // 列是否为无符号类型（SQL_DESC_UNSIGNED），读取侧据此路由到 UInt 通道，避免有符号读取溢出
+    public var isUnsigned: Bool = false
 
     public init() {
         lName = ""
@@ -39,7 +41,7 @@ public class OdbcColumnInfo <: ColumnInfo {
         }
     }
 
-    // 列类型名称，如果在 SqlDataType 中定义，返回 SqlDataType.toString(), 如果未在 SqlDataType 中定义，由数据库驱动定义
+    // 列类型名称，返回 'Sql*' 风格的标准类型名（如 SqlInt32、SqlString），未映射的类型由数据库驱动定义
     public override prop typeName: String {
         get() {
             lTypeName
