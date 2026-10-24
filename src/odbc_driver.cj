@@ -55,7 +55,9 @@ public class OdbcDriver <: Driver {
 
     /**
      * 通过 connectionString 和选项打开数据源
-     * 参数 connectionString - 数据库连接字符串, 格式为 "DATABASE=sql;UID=abc;PWD=123"
+     * 参数 connectionString - 数据库连接字符串, 格式为 "DRIVER=<驱动名>;DATABASE=sql;UID=abc;PWD=123"
+     *            或 "DSN=<数据源名>;UID=abc;PWD=123"；连接串需包含 DRIVER= 或 DSN= 指定 ODBC 驱动，
+     *            若 odbc.ini 中配置了 [Default] 数据源，可省略（现有测试契约使用 "DATABASE=...;UID=...;PWD=..."）
      * 参数 opts - key, value 的 tuple 数组，打开数据源的选项
      *            opts 只有 ("SQL_ATTR_AUTOCOMMIT", "SQL_AUTOCOMMIT_OFF") 和 ("SQL_ATTR_AUTOCOMMIT", "SQL_AUTOCOMMIT_ON")
      *            2个选项，用来设置 sql 语句提交方式
@@ -90,14 +92,22 @@ public class OdbcDriver <: Driver {
         }
         for (i in 0..arr.size) {
             var list = arr[i].split("=")
-            if (list.size != 2) {
+            if (list.size < 2) {
                 throw OdbcSqlException("", "Url is error", 0)
+            }
+            // 值中允许包含 '='（如密码 p@ss=word），将首个 '=' 之后的内容重新合并为完整值
+            var sb = StringBuilder()
+            for (j in 1..list.size) {
+                if (j > 1) {
+                    sb.append("=")
+                }
+                sb.append(list[j])
             }
             let upperKey = list[0].toAsciiUpper()
             if (upperKey == "DRIVER" || upperKey == "DSN" || upperKey == "SERVER" || upperKey == "SERVERNAME" ||
                 upperKey == "PORT" || upperKey == "DATABASE" || upperKey == "UID" || upperKey == "PWD") {
                 //标准ODBC键：转大写存储（ODBC标准键大小写不敏感）
-                connParts[upperKey] = list[1]
+                connParts[upperKey] = sb.toString()
             } else {
                 //非标准键：对齐 1.1.3 契约，直接报 Url is error
                 throw OdbcSqlException("", "Url is error", 0)

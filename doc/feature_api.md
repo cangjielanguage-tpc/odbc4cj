@@ -26,9 +26,9 @@ public class OdbcDriver <: Driver {
     * 参数 - connectionString 数据库连接字符串
     * 参数 - opts 打开数据源的选项
     *
-    * 返回值 - OdbcDatasource  数据源
+    * 返回值 - Datasource 数据源（内部为 PooledDatasource 包装）
     */
-    public func open(connectionString: String, opts: Array<(String, String)>): OdbcDatasource
+    public func open(connectionString: String, opts: Array<(String, String)>): Datasource
 }
 ```
 
@@ -45,15 +45,16 @@ public class OdbcDriver <: Driver {
 ```
 public class OdbcDatasource <: Datasource {
     /*
+    * 初始化接口（内部创建原生 API，connect() 返回真实连接）
+    */
+    public init()
+
+    /*
     * 初始化接口
     *
-    * 参数 - ENV_handle 环境句柄
-    * 参数 - dateBase 数据库名
-    * 参数 - userName 用户名
-    * 参数 - password 密码
-    * 参数 - opts 连接选项（只支持 SQL_ATTR_AUTOCOMMIT）
+    * 参数 - nativeApi 原生 API 实例
     */
-    public init(ENV_handle: CPointer<Unit>, dateBase: String, userName: String, password: String, opts: Array<(String, String)>)
+    public init(nativeApi: OdbcNativeApi)
 
     /*
     * 设置连接选项
@@ -90,14 +91,12 @@ public class OdbcDatasource <: Datasource {
 ```
 public class OdbcConnection <: Connection {
    /*
-    * 初始化接口
+    * 初始化接口（内部使用，通过 OdbcDatasource.connect() 创建）
     *
-    * 参数 - DBC_handlePtr 数据源句柄
-    * 参数 - dateBase 数据库名
-    * 参数 - userName 用户名
-    * 参数 - password 密码
+    * 参数 - nativeApi 原生 API 实例
+    * 参数 - options 连接选项
     */
-    public init(DBC_handlePtr: CPointer<Unit>, dateBase: String, userName: String, password: String)
+    internal init(nativeApi: OdbcNativeApi, options: HashMap<String, String>)
 
     /*
     * 返回有关与连接关联的驱动程序和数据源的常规信息，请参考 odbc 接口文档
@@ -112,6 +111,34 @@ public class OdbcConnection <: Connection {
     * 返回值 - String
     */
     public func getInfo(infoType: UInt16, len: Int16): String
+
+    /*
+    * 返回连接到的数据源元数据，更多信息可使用 getInfo 方法
+    *
+    * 返回值 - Map<String, String>，键包括 driver.name、driver.version、dbms.name、dbms.version、server.name、data.source.name
+    */
+    public func getMetaData(): Map<String, String>
+
+    /*
+    * 数据源 DBMS 名称（如 MySQL、GAUSS），首次访问后缓存
+    *
+    * 返回值 - String
+    */
+    public prop dbmsName: String
+
+    /*
+    * 是否为高斯数据库（zenith 驱动对部分绑定类型支持有限，需要特殊绑定）
+    *
+    * 返回值 - Bool
+    */
+    public prop isGaussDB: Bool
+
+    /*
+    * 连接对象的唯一标识（单调递增）
+    *
+    * 返回值 - UInt64
+    */
+    public prop objId: UInt64
 
     /*
     * 通过传入的 sql 语句，返回一个预执行的 Statement 对象实例
@@ -160,6 +187,8 @@ public class OdbcConnection <: Connection {
 ```
 public class OdbcStatement <: Statement {
     /*
+    * 注意：OdbcStatement 非线程安全，请不要在多个线程间共享同一个 Statement 实例
+    *
     * 初始化接口
     *
     * 参数 - DBC_handlePtr 数据源句柄
@@ -167,7 +196,7 @@ public class OdbcStatement <: Statement {
     public init(DBC_handle: CPointer<Unit>)
 
     /*
-    * 设置预执行 sql 语句选项
+    * 设置预执行 sql 语句选项（当前不支持，调用会抛出 SqlException）
     *
     * 参数 - key 属性ID
     * 参数 - value 属性值
@@ -186,9 +215,9 @@ public class OdbcStatement <: Statement {
     public override func set<T>(index: Int, value: T): Unit
 
     /**
-     * 设置预执行sql语句null参数 - 暂不支持
+     * 设置预执行sql语句null参数
      *
-     * 参数 index - 位置
+     * 参数 index - 位置（0 基）
      * 异常 SqlException - 参数设置错误。
      */
     public override func setNull(index: Int): Unit
@@ -388,6 +417,6 @@ public class OdbcTransaction <: Transaction {
     *
     * 返回值 - Unit
     */
-    public func commit(): Unit
+    public func rollback(): Unit
 }
 ```

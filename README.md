@@ -148,6 +148,8 @@ windows 运行
 
 ### 功能示例
 
+> 注意：连接串需包含 DRIVER= 或 DSN= 指定 ODBC 驱动（或在 odbc.ini 配置 [Default] 数据源）。下例沿用现有测试契约格式。
+
 ```cangjie
 // EXEC: cjc %import-path %L %l %f
 // EXEC: ./main
@@ -202,13 +204,14 @@ None
 
 ## 约束与限制
 
-1. 不支持数据类型（SqlTimeTz、SqlTimestamp、SqlInterval），新增支持数据类型请参考 sqlTypeExtend.cj
+1. 不支持数据类型（SqlTimeTz、SqlInterval、GUID、数据库扩展类型如 SQL Server 的 SQL_SS_* 系列），新增支持数据类型请参考 sqlTypeExtend.cj
 2. interface Driver 不支持 name、version、preferredPooling
-3. Datasource 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
-4. interface Connection 不支持 getMetaData()，请使用 getInfo(infoType: UInt16, len: Int16)
-5. interface Statement 不支持 setOption(key: String, value: String)，请使用 setOption(key: Int32, value: Int64)
+3. OdbcDatasource 已支持 setOption(key: String, value: String)；Statement 的 setOption 两种重载暂未实现（调用会抛出 SqlException）
+4. Connection 已实现 getMetaData() 基础元数据查询；更详细的连接信息请使用 getInfo(infoType: UInt16, len: Int16)
+5. interface Statement 不支持 setOption(key: String, value: String) 和 setOption(key: Int32, value: Int64)，调用会抛出 SqlException
 6. interface UpdateResult 不支持 lastInsertId
-7. interface Transaction 不支持 accessMode、deferrableMode、save(savePointName: String)、rollback(savepointName: String)、release(savePointName: String)
+7. Transaction 已支持 accessMode；不支持 deferrableMode、save(savePointName: String)、rollback(savepointName: String)、release(savePointName: String)（ODBC 无保存点 API）
+8. 连接串需包含 DRIVER= 或 DSN= 指定 ODBC 驱动；若 odbc.ini 配置了 [Default] 数据源，可省略（现有测试契约使用 "DATABASE=...;UID=...;PWD=..." 格式，依赖 [Default] 数据源）
 
 ## 开源协议
 

@@ -12,27 +12,38 @@ public class OdbcTransaction <: Transaction {
      */
     public mut override prop isoLevel: TransactionIsoLevel {
         get() {
-            var infoValue: UInt32
             var infoValuePtr = nativeApi.malloc(LEN_MALLOC_4)
             if (infoValuePtr.isNull()) {
                 throw SqlException("Native malloc Failed.")
             }
-            var ret = nativeApi.sqlGetInfo(DBC_handlePtr, SQL_TXN_ISOLATION_OPTION, infoValuePtr, 4, CPointer<Int16>())
+            var strLenPtr = CPointer<Int32>(nativeApi.malloc(LEN_MALLOC_4))
+            if (strLenPtr.isNull()) {
+                nativeApi.free(infoValuePtr)
+                throw SqlException("Native malloc Failed.")
+            }
+            unsafe { CPointer<UInt32>(infoValuePtr).write(0) }
+            // 当前生效的隔离级别必须用 SQLGetConnectAttr(SQL_ATTR_TXN_ISOLATION) 读取（与 setter 写入同一属性）；
+            // 原实现误用 SQLGetInfo(SQL_TXN_ISOLATION_OPTION)，那是驱动“支持”的级别集合而非当前值
+            var ret = nativeApi.sqlGetConnectAttr(DBC_handlePtr, SQL_ATTR_TXN_ISOLATION, infoValuePtr,
+                Int32(LEN_MALLOC_4), strLenPtr)
             if (!SQLSucceeded(ret)) {
                 nativeApi.free(infoValuePtr)
+                nativeApi.free(CPointer<Unit>(strLenPtr))
                 throw nativeApi.diagnoseException(SQL_HANDLE_DBC, DBC_handlePtr)
             }
-            infoValue = unsafe { CPointer<UInt32>(infoValuePtr).read() }
+            var infoValue = unsafe { CPointer<UInt32>(infoValuePtr).read() }
             nativeApi.free(infoValuePtr)
+            nativeApi.free(CPointer<Unit>(strLenPtr))
 
-            if (infoValue == SQL_TXN_READ_UNCOMMITTED) {
-                level = ReadUncommitted
-            } else if (infoValue == SQL_TXN_READ_COMMITTED) {
-                level = ReadCommitted
-            } else if (infoValue == SQL_TXN_REPEATABLE_READ) {
-                level = RepeatableRead
-            } else if (infoValue == SQL_TXN_SERIALIZABLE) {
+            // 返回值为隔离级别位掩码，按位匹配（个别驱动可能返回组合位）
+            if ((infoValue & SQL_TXN_SERIALIZABLE) != 0) {
                 level = Serializable
+            } else if ((infoValue & SQL_TXN_REPEATABLE_READ) != 0) {
+                level = RepeatableRead
+            } else if ((infoValue & SQL_TXN_READ_COMMITTED) != 0) {
+                level = ReadCommitted
+            } else if ((infoValue & SQL_TXN_READ_UNCOMMITTED) != 0) {
+                level = ReadUncommitted
             } else {
                 level = ReadCommitted
             }
@@ -65,7 +76,7 @@ public class OdbcTransaction <: Transaction {
     }
 
     /*
-     * 数据库事务访问模式。(不支持)
+     * 数据库事务访问模式。
      */
     public mut override prop accessMode: TransactionAccessMode {
         get() {
@@ -113,9 +124,9 @@ public class OdbcTransaction <: Transaction {
     }
 
     /*
-     * 开始数据库事务。
-     * 异常 SqlException - 提交事务时服务器端发生错误。
-     * 异常 SqlException - 事务已提交或回滚或连接已断开。
+     * 开始数据库事务（关闭自动提交）。
+     * 异常 SqlException - 开启事务时服务器端发生错误。
+     * 异常 SqlException - 连接已关闭。
      */
     public override func begin(): Unit {
         if (odbcConnection.isClosed()) {
@@ -164,8 +175,7 @@ public class OdbcTransaction <: Transaction {
 
     /*
      * 在事务中创建一个指定名称的保存点，可用于回滚事务的一部分。(不支持)
-     * 异常 SqlException - 提交事务时服务器端发生错误。
-     * 异常 SqlException - 事务已提交或回滚或连接已断开。
+     * 异常 UnsupportedException - ODBC 不支持保存点。
      */
     public override func save(savePointName: String): Unit {
         throw UnsupportedException("ODBC does not support savepoints")
@@ -173,8 +183,7 @@ public class OdbcTransaction <: Transaction {
 
     /*
      * 回滚事务至指定保存点名称。(不支持)
-     * 异常 SqlException - 提交事务时服务器端发生错误。
-     * 异常 SqlException - 事务已提交或回滚或连接已断开。
+     * 异常 UnsupportedException - ODBC 不支持保存点。
      */
     public override func rollback(savePointName: String): Unit {
         throw UnsupportedException("ODBC does not support savepoints")
@@ -182,8 +191,7 @@ public class OdbcTransaction <: Transaction {
 
     /*
      * 销毁先前在当前事务中定义的保存点。这允许系统在事务结束之前回收一些资源。(不支持)
-     * 异常 SqlException - 提交事务时服务器端发生错误。
-     * 异常 SqlException - 事务已提交或回滚或连接已断开。
+     * 异常 UnsupportedException - ODBC 不支持保存点。
      */
     public override func release(savePointName: String): Unit {
         throw UnsupportedException("ODBC does not support savepoints")

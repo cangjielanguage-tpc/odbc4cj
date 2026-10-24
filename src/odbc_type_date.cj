@@ -6,9 +6,9 @@ package odbc4cj
 public class OdbcTypeDate{
     private var dateTime: DateTime
     /*
-     * 
+     * 构造日期值
      *
-     * 参数 inputStream - 
+     * 参数 dateTime - 包含年月日的日期值
      */
     public init(dateTime: DateTime) {
         this.dateTime = dateTime

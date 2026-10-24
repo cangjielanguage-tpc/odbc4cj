@@ -43,6 +43,10 @@ public let SQL_ATTR_TRANSLATE_OPTION: Int32 = 107
 public let SQL_ATTR_TXN_ISOLATION: Int32 = 108
 public let SQL_ATTR_QUERY_TIMEOUT: Int32 = 6
 
+/* Column descriptor fields (SQLColAttribute) */
+// SQL_DESC_UNSIGNED = 8（sqlext.h: SQL_COLUMN_UNSIGNED），此前误写 12（实为 SQL_DESC_CASE_SENSITIVE）导致静默失败
+public let SQL_DESC_UNSIGNED: UInt16 = 8
+
 /* Autocommit options */
 public let SQL_AUTOCOMMIT_OFF: Int64 = 0
 public let SQL_AUTOCOMMIT_ON: Int64 = 1
@@ -176,6 +180,8 @@ let LEN_MALLOC_4: UIntNative = 4
 let LEN_MALLOC_6: UIntNative = 6
 let LEN_MALLOC_8: UIntNative = 8
 let LEN_MALLOC_16: UIntNative = 16
+// CLOB/BLOB 参数读流的批量缓冲大小
+let READ_CHUNK_SIZE: Int64 = 4096
 
 /**SQLDRIVERCONNENT DriverCompletion*/
 let SQL_DRIVER_NOPROMPT: UInt16 = 0
@@ -395,5 +401,7 @@ struct ParamInfo {
     var isString: Bool = false
     var cstring: CString = CString(CPointer<UInt8>())
     var isArrary: Bool = false
-    var cptrHand: CPointerHandle<UInt8> = unsafe { acquireArrayRawData<UInt8>(Array<UInt8>()) }
+    // 二进制参数绑定的数组句柄；仅 setBytes/setClob/setBlob 赋值时 acquire，
+    // 默认构造不 acquire（否则每次构造都 pin 住一个空数组且无处释放）
+    var cptrHand: ?CPointerHandle<UInt8> = None
 }
